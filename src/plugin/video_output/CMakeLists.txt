@@ -1,1 +1,2 @@
 add_src_and_test(video_renderer)
+add_src_and_test(bmd_decklink)

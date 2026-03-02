@@ -1,0 +1,7 @@
+<RCC>
+	<qresource prefix="/bmd_icons">
+	    <file alias="sdi-logo.svg">sdi-logo.svg</file>
+	    <file alias="status-error.svg">status-error.svg</file>
+	    <file alias="status-ok.svg">status-ok.svg</file>
+	</qresource>
+</RCC>

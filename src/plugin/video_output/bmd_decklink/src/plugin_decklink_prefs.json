@@ -1,0 +1,54 @@
+{
+	"plugin": {
+		"decklink": {
+			"output_resolution": {
+				"path": "/plugin/decklink/output_resolution",
+				"default_value": "1920 x 1080",
+				"description": "default SDI output resolution",
+				"value": "1920 x 1080",
+				"datatype": "string",
+				"context": ["PLUGIN"]
+			},
+			"output_frame_rate": {
+				"path": "/plugin/decklink/output_frame_rate",
+				"default_value": "24.0",
+				"description": "default SDI output refresh rate",
+				"value": "24.0",
+				"datatype": "string",
+				"context": ["PLUGIN"]
+			},
+			"pixel_format": {
+				"path": "/plugin/decklink/pixel_format",
+				"default_value": "10 bit RGB",
+				"description": "Default SDI output pixel format",
+				"value": "10 bit RGB",
+				"datatype": "string",
+				"context": ["PLUGIN"]
+			},
+			"auto_start_sdi": {
+				"path": "/plugin/decklink/auto_start_sdi",
+				"default_value": false,
+				"description": "If set will cause SDI output to turn on when xSTUDIO starts up.",
+				"value": false,
+				"datatype": "bool",
+				"context": ["PLUGIN"]
+			},
+			"audio_samps_water_level": {
+				"path": "/plugin/decklink/audio_samps_water_level",
+				"default_value": 4096,
+				"description": "This determines the number of audio samples buffered by the SDI card in front of playback.",
+				"value": 4096,
+				"datatype": "int",
+				"context": ["PLUGIN"]
+			},
+			"audio_sync_delay": {
+				"path": "/plugin/decklink/audio_sync_delay",
+				"default_value": 500,
+				"description": "This can be used to adjust sync between audio out and video.",
+				"value": 500,
+				"datatype": "int",
+				"context": ["PLUGIN"]
+			}
+		}
+	}
+}
