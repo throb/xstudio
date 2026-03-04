@@ -25,9 +25,11 @@ set(CMAKE_AUTORCC ON)
 # Platform-conditional DeckLink SDK dispatch source
 if(APPLE)
 	set(DECKLINK_DISPATCH_SRC extern/mac/DeckLinkAPIDispatch.cpp)
-elif(LINUX)
+elseif(UNIX)
 	set(DECKLINK_DISPATCH_SRC extern/linux/DeckLinkAPIDispatch.cpp)
 endif()
+
+message("BASKET DECKLINK_DISPATCH_SRC ${DECKLINK_DISPATCH_SRC}")
 
 set(SOURCES
 	decklink_plugin.cpp
@@ -59,7 +61,6 @@ target_link_libraries(${PROJECT_NAME}
 		xstudio::ui::viewport
 		CAF::core
 		Qt6::Core
-		decklink_idl
 	PRIVATE
 		OpenEXR::OpenEXR
 		Imath::Imath
@@ -122,6 +123,4 @@ if(APPLE)
 	)
 endif()
 
-install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION lib/xstudio/cpp-plugins)
-
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/plugin_decklink_prefs.json DESTINATION lib/xstudio/cpp-plugins/preferences)
+default_plugin_options(${PROJECT_NAME})

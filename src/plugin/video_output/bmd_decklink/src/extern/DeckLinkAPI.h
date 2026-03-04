@@ -14,4 +14,5 @@
 
 #if defined(__linux__)
 #include "linux/DeckLinkAPI.h"
+#define BOOL bool
 #endif

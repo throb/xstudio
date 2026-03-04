@@ -52,6 +52,18 @@ void VideoOutputPlugin::finalise() {
                 // this is the offscreen renderer that we asked for below.
                 offscreen_viewport_ = offscreen_vp;
 
+                mail(colour_pipeline::colour_pipeline_atom_v)
+                    .request(offscreen_viewport_, infinite)
+                    .then([=](caf::actor colour_pipeline) {
+                        offscreen_colour_pipeline_ = colour_pipeline;
+                    },
+                    [=](caf::error &err) {
+                        spdlog::warn(
+                            "{} failed to acquire colour pipeline actor from viewport:  {}",
+                            __PRETTY_FUNCTION__,
+                            to_string(err));
+                    });
+
                 // sending this message forces the new viewport attach to the current
                 // on screen playhead
                 anon_mail(viewport_playhead_atom_v, true).send(offscreen_viewport_);

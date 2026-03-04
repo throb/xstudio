@@ -8,7 +8,7 @@
 namespace xstudio {
 namespace bm_decklink_plugin_1_0 {
 
-    class DecklinkOutput;
+    class MockDecklinkOutput;
 
     /**
      *  @brief DecklinkAudioOutputDevice class. Implements AudioOutputDevice
@@ -21,7 +21,7 @@ namespace bm_decklink_plugin_1_0 {
     class DecklinkAudioOutputDevice : public audio::AudioOutputDevice {
       public:
 
-        DecklinkAudioOutputDevice(const utility::JsonStore &prefs, DecklinkOutput * bmd_output);
+        DecklinkAudioOutputDevice(const utility::JsonStore &prefs, MockDecklinkOutput * bmd_output);
 
         ~DecklinkAudioOutputDevice() override;
 
@@ -53,7 +53,7 @@ namespace bm_decklink_plugin_1_0 {
         audio::SampleFormat sample_format_ = {audio::SampleFormat::INT16};
         const utility::JsonStore config_;
         const utility::JsonStore prefs_;
-        DecklinkOutput * bmd_output_;
+        MockDecklinkOutput * bmd_output_;
     };
 
 

@@ -240,9 +240,9 @@ Item {
                         Layout.column: 1
                         Layout.preferredHeight: 24
                         Layout.preferredWidth: maxBoxWidth
-                        onModelWidthChanged: {
+                        /*onModelWidthChanged: {
                             maxBoxWidth = Math.max(maxBoxWidth, modelWidth)
-                        }
+                        }*/
                         enabled: disable_when_running ? !is_running : true
                     }    
                 }
@@ -363,41 +363,6 @@ Item {
             Layout.fillHeight: true
         }
 
-    }
-
-    RoundButton {
-        id: btnOK
-        text: qsTr("Close")
-        width: 60
-        height: 24
-        radius: 5
-        anchors.bottom: parent.bottom
-        anchors.right: parent.right
-        anchors.margins: 5
-        DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
-        background: Rectangle {
-            radius: 5
-//                color: XsStyleSheet.highlightColor//mouseArea.containsMouse?:XsStyleSheet.controlBackground
-            color: mouseArea.containsMouse?XsStyleSheet.primaryColor:XsStyleSheet.controlBackground
-            gradient:mouseArea.containsMouse?styleGradient.accent_gradient:Gradient.gradient
-            anchors.fill: parent
-        }
-        contentItem: Text {
-            text: btnOK.text
-            color: XsStyleSheet.hoverColor//:XsStyleSheet.mainColor
-            font.family: XsStyleSheet.fontFamily
-            font.hintingPreference: Font.PreferNoHinting
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-        }
-
-        MouseArea {
-            id: mouseArea
-            hoverEnabled: true
-            anchors.fill: btnOK
-            cursorShape: Qt.PointingHandCursor
-            onClicked: bmd_settings_dialog.close()
-        }
     }
 
 }

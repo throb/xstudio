@@ -48,6 +48,37 @@ namespace {
             {"10 bit RGB-LE Video Range", bmdFormat10BitRGBXLE}
         });
 
+    static const std::vector<std::string> hdr_metadata_value_names({
+        "Red x",
+        "Red y",
+        "Green x",
+        "Green y",
+        "Blue x",
+        "Blue y",
+        "White Pt. x",
+        "White Pt. y"});
+
+    const std::vector<std::string> light_level_controls_names({
+        "D.M. Lum. Min",
+        "D.M. Lum. Max",
+        "CLL Max",
+        "Frm Avg Light"
+    });
+    
+    const std::map <std::string, int64_t> eotf_modes({
+        {"SDR", 0},
+        {"HDR", 1},
+        {"PQ", 2},
+        {"HLG", 3},
+        {"Auto PQ", -1},
+    });
+
+    const std::map <std::string, int64_t> colourspaces({
+        {"BT. 601", bmdColorspaceRec601},
+        {"BT. 709", bmdColorspaceRec709},
+        {"BT. 2020", bmdColorspaceRec2020}
+    });
+
 static const std::string version1_ui_qml(R"(
 import QtQuick 2.12
 import BlackmagicSDI 1.0
@@ -76,7 +107,7 @@ BMDecklinkPlugin::BMDecklinkPlugin(
     if (!drivers_found)
 #endif
 #ifdef __linux__    
-	if (!dlopen(kDeckLinkAPI_Name, RTLD_NOW|RTLD_GLOBAL))
+	if (0) //!dlopen(kDeckLinkAPI_Name, RTLD_NOW|RTLD_GLOBAL))
 #endif
 #ifdef _WIN32
     {
@@ -144,6 +175,8 @@ BMDecklinkPlugin::BMDecklinkPlugin(
     disable_pc_audio_when_running_->set_preference_path("/plugin/decklink/disable_pc_audio_when_sdi_is_running");
     disable_pc_audio_when_running_->expose_in_ui_attrs_group("Decklink Settings");
 
+    make_hdr_attributes();
+
     VideoOutputPlugin::finalise();
 }
 
@@ -177,6 +210,20 @@ void BMDecklinkPlugin::attribute_changed(const utility::Uuid &attribute_uuid, co
 {
 
     if (dcl_output_) {
+
+        std::cerr << "hdr_presets_ " << hdr_presets_ << "\n";
+        std::cerr << "resolutions_ " << resolutions_ << "\n";
+        std::cerr << "start_stop_ " << start_stop_ << "\n";
+        std::cerr << "pixel_formats_ " << pixel_formats_ << "\n";
+        std::cerr << "track_main_viewport_ " << track_main_viewport_ << "\n";
+        std::cerr << "samples_water_level_ " << samples_water_level_ << "\n";
+        std::cerr << "audio_sync_delay_milliseconds_ " << audio_sync_delay_milliseconds_ << "\n";
+        std::cerr << "video_pipeline_delay_milliseconds_ " << video_pipeline_delay_milliseconds_ << "\n";
+        std::cerr << "disable_pc_audio_when_running_ " << disable_pc_audio_when_running_ << "\n";
+        std::cerr << "sdi_output_is_running_ " << sdi_output_is_running_ << "\n";
+        std::cerr << "hdr_presets_ " << hdr_presets_ << "\n";
+
+
 
         if (resolutions_ && attribute_uuid == resolutions_->uuid() && role == module::Attribute::Value) {
 
@@ -253,6 +300,30 @@ void BMDecklinkPlugin::attribute_changed(const utility::Uuid &attribute_uuid, co
             set_pc_audio_muting();
         } else if (attribute_uuid == sdi_output_is_running_->uuid()) {
             set_pc_audio_muting();
+        } else if (attribute_uuid == hdr_presets_->uuid()) {
+            
+            if (hdr_presets_data_.contains(hdr_presets_->value())) {
+
+                const auto &vals = hdr_presets_data_[hdr_presets_->value()];
+                if (vals.is_array() && vals.size() == 8) {
+                    int idx = 0;
+                    for (auto &setting_attr: hdr_metadata_settings_) {
+                        setting_attr->set_value(vals[idx++].get<float>());
+                    }
+                }
+            }
+
+        } else if (role == module::Attribute::Value &&
+            hdr_metadata_settings_uuids_.find(attribute_uuid) != hdr_metadata_settings_uuids_.end()) {
+            set_hdr_mode_and_metadata();
+            if (!prefs_save_scheduled_) {
+                prefs_save_scheduled_ = true;
+                delayed_anon_send(
+                    caf::actor_cast<caf::actor>(this),
+                    std::chrono::seconds(5),
+                    "save_hdr_colour_prefs"
+                    );
+            }
         }
 
     }
@@ -268,7 +339,9 @@ void BMDecklinkPlugin::initialise() {
 
     try {
 
-        dcl_output_ = new DecklinkOutput(this);
+        dcl_output_ = new MockDecklinkOutput(this);
+
+        set_hdr_mode_and_metadata();
 
         resolutions_->set_role_data(module::Attribute::StringChoices, dcl_output_->output_resolution_names());
 
@@ -336,6 +409,190 @@ void BMDecklinkPlugin::set_pc_audio_muting() {
         const bool mute = disable_pc_audio_when_running_->value() && sdi_output_is_running_->value();
         anon_send(pc_audio_output_actor, audio::set_override_volume_atom_v, mute ? 0.0f : -1.0f);
     }
+
+}
+
+void BMDecklinkPlugin::make_hdr_attributes()
+{
+
+    // Add the HDR mode attribute
+    hdr_mode_ = add_string_choice_attribute("HDR Mode", "HDR Mode", "SDR", utility::map_key_to_vec(eotf_modes));
+    hdr_mode_->expose_in_ui_attrs_group("Decklink HDR Settings");
+    hdr_mode_->set_preference_path("/plugin/decklink/hdr_mode");
+    hdr_metadata_settings_uuids_.insert(hdr_mode_->uuid());
+
+    // Add the Colourspace mode attribute
+    colourspace_ = add_string_choice_attribute("Colour Space", "Colour Space", "BT. 709", utility::map_key_to_vec(colourspaces));
+    colourspace_->expose_in_ui_attrs_group("Decklink HDR Settings");
+    colourspace_->set_preference_path("/plugin/decklink/colourspace");
+    hdr_metadata_settings_uuids_.insert(colourspace_->uuid());
+
+    // Fetch the ocio display name match string for auto HDR mode switching
+    auto prefs = global_store::GlobalStoreHelper(system());
+    try {
+        ocio_display_hdr_match_string_ =
+            utility::to_lower(prefs.value<std::string>("/plugin/decklink/ocio_display_hdr_match_string"));
+    } catch (std::exception & e) {
+        spdlog::warn("{} {}", __PRETTY_FUNCTION__, e.what());
+    }
+
+    std::array<float, 8> colour_settings({0.64, 0.33, 0.30, 0.6, 0.15, 0.06, 0.3127, 0.329});
+    try {
+        auto colour_vals =
+            prefs.value<utility::JsonStore>("/plugin/decklink/hdr_colour_metadata_values");
+        if (colour_vals.is_array() && colour_vals.size() == 8) {
+            int idx = 0;
+            for (auto &o: colour_vals) {
+                if (!o.is_number()) {
+                    throw std::runtime_error("hdr_colour_metadata_values should be 8 float values.");
+                }
+                colour_settings[idx++] = o.get<float>();
+            }
+        } else {
+            throw std::runtime_error("hdr_colour_metadata_values should be an array of 8 float values.");
+        }
+    } catch (std::exception & e) {
+        spdlog::warn("{}: Failed to load perference /plugin/decklink/hdr_colour_metadata_values: {}", __PRETTY_FUNCTION__, e.what());
+    }
+
+    int idx = 0;
+    for (const auto &o: hdr_metadata_value_names) {
+        hdr_metadata_settings_.push_back(add_float_attribute(o, o, colour_settings[idx++]));
+        hdr_metadata_settings_.back()->expose_in_ui_attrs_group("Decklink HDR Values");
+        hdr_metadata_settings_uuids_.insert(hdr_metadata_settings_.back()->uuid());
+    }
+
+
+    std::array<float, 4> lum_settings({0.0005, 1000.0, 1000.0, 400.0});
+    try {
+        auto lum__vals =
+            prefs.value<utility::JsonStore>("/plugin/decklink/hdr_luminance_metadata_values");
+        if (lum__vals.is_array() && lum__vals.size() == 4) {
+            int idx = 0;
+            for (auto &o: lum__vals) {
+                if (!o.is_number()) {
+                    throw std::runtime_error("hdr_luminance_metadata_values should be 4 float values.");
+                }
+                lum_settings[idx++] = o.get<float>();
+            }
+        } else {
+            throw std::runtime_error("hdr_luminance_metadata_values should be an array of 4 float values.");
+        }
+    } catch (std::exception & e) {
+        spdlog::warn("{}: Failed to load perference /plugin/decklink/hdr_luminance_metadata_values: {}", __PRETTY_FUNCTION__, e.what());
+    }
+
+    idx = 0;
+    for (const auto &o: light_level_controls_names) {
+        hdr_metadata_lightlevel_.push_back(add_float_attribute(o, o, lum_settings[idx++]));
+        hdr_metadata_lightlevel_.back()->expose_in_ui_attrs_group("Decklink HDR Values");
+        hdr_metadata_settings_uuids_.insert(hdr_metadata_lightlevel_.back()->uuid());
+    }
+
+    try {
+
+        hdr_presets_ = add_string_choice_attribute("HDR Presets", "HDR Presets", "", {});
+        hdr_presets_->expose_in_ui_attrs_group("Decklink HDR Settings");
+
+        hdr_presets_data_ =
+            prefs.value<utility::JsonStore>("/plugin/decklink/hdr_presets");
+        std::vector<std::string> presets_names;
+
+        if (hdr_presets_data_.is_object()) {
+            for (auto it = hdr_presets_data_.begin(); it != hdr_presets_data_.end(); it++) {
+                presets_names.push_back(it.key());
+            }
+            hdr_presets_->set_role_data(module::Attribute::StringChoices, presets_names);
+        } else {
+            throw std::runtime_error("hdr_presets should a json dictionary.");
+        }
+
+    } catch (std::exception & e) {
+        spdlog::warn("{}: Failed to load perference /plugin/decklink/hdr_presets: {}", __PRETTY_FUNCTION__, e.what());
+    }
+
+}
+
+void BMDecklinkPlugin::set_hdr_mode_and_metadata() {
+
+    if (!dcl_output_) return;
+    
+    HDRMetadata metadata;
+    auto p = eotf_modes.find(hdr_mode_->value());
+    metadata.EOTF = p != eotf_modes.end() ? p->second : 0;
+
+    if (metadata.EOTF == -1) {
+        // auto turn on HDR mode if the ocio display includes the string 'ocio_display_hdr_match_string_'
+        // which was set from our preferences. So for example, if ocio_display_hdr_match_string_ is 'hdr'
+        // then if the ocio display is 'Screening Room (HDR)' then HDR output is turned on
+        if (utility::to_lower(get_ocio_display_name()).find(ocio_display_hdr_match_string_) != std::string::npos) {
+            metadata.EOTF = 2; // PQ (Perceptual Quantization or something)
+        } else {
+            metadata.EOTF = 0;
+        }
+    }
+
+    auto q = colourspaces.find(colourspace_->value());
+    metadata.colourspace_ = q != colourspaces.end() ? q->second : bmdColorspaceRec709;
+
+    for (size_t i = 0; i < hdr_metadata_settings_.size(); ++i) {
+        metadata.referencePrimaries[i] = hdr_metadata_settings_[i]->value();
+    }
+
+    for (size_t i = 0; i < hdr_metadata_lightlevel_.size(); ++i) {
+        metadata.luminanceSettings[i] = hdr_metadata_lightlevel_[i]->value();
+    }
+
+    dcl_output_->set_hdr_metadata(metadata);
+
+}
+
+void BMDecklinkPlugin::save_hdr_colour_prefs() {
+    
+    utility::JsonStore cvals(nlohmann::json::parse("[]"));
+    utility::JsonStore lvals(nlohmann::json::parse("[]"));
+    for (size_t i = 0; i < hdr_metadata_settings_.size(); ++i) {
+        cvals.push_back(hdr_metadata_settings_[i]->value());
+    }
+
+    for (size_t i = 0; i < hdr_metadata_lightlevel_.size(); ++i) {
+        lvals.push_back(hdr_metadata_lightlevel_[i]->value());
+    }
+
+    // Fetch the ocio display name match string for auto HDR mode switching
+    auto prefs = global_store::GlobalStoreHelper(system());
+    try {
+        prefs.set_value(cvals, "/plugin/decklink/hdr_colour_metadata_values");
+        prefs.set_value(lvals, "/plugin/decklink/hdr_luminance_metadata_values");
+    } catch (std::exception & e) {
+        spdlog::warn("{} {}", __PRETTY_FUNCTION__, e.what());
+    }
+    prefs_save_scheduled_ = false;
+}
+
+std::string BMDecklinkPlugin::get_ocio_display_name() {
+
+    if (!colour_pipeline()) return std::string();
+
+    try {
+
+        scoped_actor sys{system()};
+
+        auto ocio_display = utility::request_receive<utility::JsonStore>(
+            *sys,
+            colour_pipeline(),
+            module::attribute_value_atom_v,
+            std::string("Display"));
+
+        if (ocio_display.is_string()) {
+            return ocio_display.get<std::string>();
+        }
+
+    } catch (const std::exception &e) {
+        spdlog::warn("{} {}", __PRETTY_FUNCTION__, e.what());
+    }
+
+    return std::string();
 
 }
 

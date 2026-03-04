@@ -27,6 +27,7 @@ HRESULT RGB10BitVideoFrame::GetBytes(void **buffer)
 
 HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID *ppv)
 {
+
 	HRESULT 		result = E_NOINTERFACE;
 
 	if (ppv == NULL)
@@ -36,7 +37,13 @@ HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID 
 	*ppv = NULL;
 
 	// Obtain the IUnknown interface and compare it the provided REFIID
-    if (memcmp(&iid, &IID_IUnknown, sizeof(REFIID)) == 0)
+#ifdef __APPLE__
+	CFUUIDBytes iunknown = CFUUIDGetUUIDBytes(IUnknownUUID);
+	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
+#else
+	static const REFIID iunknown = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x46};
+	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
+#endif
 	{
 		*ppv = this;
 		AddRef();
