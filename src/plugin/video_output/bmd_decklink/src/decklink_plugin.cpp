@@ -110,12 +110,13 @@ BMDecklinkPlugin::BMDecklinkPlugin(
 	if (0) //!dlopen(kDeckLinkAPI_Name, RTLD_NOW|RTLD_GLOBAL))
 #endif
 #ifdef _WIN32
-    {
+    /*{
         HMODULE hModule = LoadLibraryA("DeckLinkAPI.dll");
         if (!hModule) {
             spdlog::error("Failed to load DeckLinkAPI.dll");
         }
-    }
+    }*/
+    if (0)
 #endif
 	{
 		send_exit(this, caf::exit_reason::user_shutdown);
@@ -339,11 +340,14 @@ void BMDecklinkPlugin::initialise() {
 
     try {
 
-        dcl_output_ = new MockDecklinkOutput(this);
-
+        std::cerr << "BMDecklinkPlugin::initialise()\n";
+        dcl_output_ = new DecklinkOutput(this);
+        std::cerr << "DecklinkOutput created\n";
         set_hdr_mode_and_metadata();
+        std::cerr << "HDR mode and metadata set\n";
 
         resolutions_->set_role_data(module::Attribute::StringChoices, dcl_output_->output_resolution_names());
+        std::cerr << "Output resolutions set\n";
 
         dcl_output_->set_audio_samples_water_level(samples_water_level_->value());
         dcl_output_->set_audio_sync_delay_milliseconds(audio_sync_delay_milliseconds_->value());

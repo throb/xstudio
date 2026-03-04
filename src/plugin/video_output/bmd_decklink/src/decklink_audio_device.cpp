@@ -8,7 +8,7 @@
 using namespace xstudio::bm_decklink_plugin_1_0;
 using namespace xstudio::global_store;
 
-DecklinkAudioOutputDevice::DecklinkAudioOutputDevice(const utility::JsonStore &prefs, MockDecklinkOutput * bmd_output)
+DecklinkAudioOutputDevice::DecklinkAudioOutputDevice(const utility::JsonStore &prefs, DecklinkOutput * bmd_output)
     : prefs_(prefs), bmd_output_(bmd_output) {}
 
 DecklinkAudioOutputDevice::~DecklinkAudioOutputDevice() { 

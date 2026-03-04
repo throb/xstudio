@@ -29,8 +29,6 @@ elseif(UNIX)
 	set(DECKLINK_DISPATCH_SRC extern/linux/DeckLinkAPIDispatch.cpp)
 endif()
 
-message("BASKET DECKLINK_DISPATCH_SRC ${DECKLINK_DISPATCH_SRC}")
-
 set(SOURCES
 	decklink_plugin.cpp
 	decklink_output.cpp
@@ -68,6 +66,10 @@ target_link_libraries(${PROJECT_NAME}
 		fmt::fmt
 )
 
+if (WIN32)
+	target_link_libraries(${PROJECT_NAME} PRIVATE decklink_idl)
+endif()
+
 file(GLOB QML_SOURCES RELATIVE ${CMAKE_CURRENT_LIST_DIR} BlackmagicSDI/*.qml)
 
 message("QML_SOURCES ${QML_SOURCES}  ${CMAKE_CURRENT_LIST_DIR}")
@@ -93,7 +95,7 @@ qt_add_qml_module(${PROJECT_NAME}
 # Platform-specific link dependencies
 if(APPLE)
 	target_link_libraries(${PROJECT_NAME} PRIVATE "-framework CoreFoundation")
-else()
+elseif(UNIX)
 	target_link_libraries(${PROJECT_NAME} PRIVATE dl)
 endif()
 

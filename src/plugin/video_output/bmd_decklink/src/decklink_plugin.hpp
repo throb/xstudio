@@ -10,7 +10,7 @@ CAF_POP_WARNINGS
 namespace xstudio {
     namespace bm_decklink_plugin_1_0 {
 
-    class MockDecklinkOutput;
+    class DecklinkOutput;
 
     class BMDecklinkPlugin : public ui::viewport::VideoOutputPlugin {
 
@@ -47,7 +47,7 @@ namespace xstudio {
 
         void set_pc_audio_muting();
 
-        MockDecklinkOutput * dcl_output_ = nullptr;
+        DecklinkOutput * dcl_output_ = nullptr;
 
         module::StringChoiceAttribute *pixel_formats_ {nullptr};
         module::StringChoiceAttribute *resolutions_ {nullptr};

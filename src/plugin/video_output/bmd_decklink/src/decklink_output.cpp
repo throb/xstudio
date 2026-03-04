@@ -27,7 +27,6 @@ HRESULT RGB10BitVideoFrame::GetBytes(void **buffer)
 
 HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID *ppv)
 {
-
 	HRESULT 		result = E_NOINTERFACE;
 
 	if (ppv == NULL)
@@ -37,13 +36,7 @@ HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID 
 	*ppv = NULL;
 
 	// Obtain the IUnknown interface and compare it the provided REFIID
-#ifdef __APPLE__
-	CFUUIDBytes iunknown = CFUUIDGetUUIDBytes(IUnknownUUID);
-	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
-#else
-	static const REFIID iunknown = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x46};
-	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
-#endif
+    if (memcmp(&iid, &IID_IUnknown, sizeof(REFIID)) == 0)
 	{
 		*ppv = this;
 		AddRef();
@@ -177,7 +170,19 @@ bool DecklinkOutput::init_decklink()
 
     try {
 
+#ifdef _WIN32        
+std::cerr << "Creating DeckLink Iterator\n";
+       	HRESULT result; 
+    	result = CoCreateInstance(CLSID_CDeckLinkIterator, NULL, CLSCTX_ALL, IID_IDeckLinkIterator, (void**)&decklink_iterator);
+        std::cerr << "DeckLink Iterator created " << result << "\n";
+        if (FAILED(result))
+        {
+            throw std::runtime_error("Please install the Blackmagic DeckLink drivers to use the features of this application.This application requires the DeckLink drivers installed.");
+            return false;
+        }
+#else
         decklink_iterator = CreateDeckLinkIteratorInstance();
+#endif
         if (decklink_iterator == NULL)
         {
             throw std::runtime_error("This plugin requires the DeckLink drivers installed. Please install the Blackmagic DeckLink drivers to use the features of this plugin.");
@@ -202,11 +207,26 @@ bool DecklinkOutput::init_decklink()
         if (decklink_output_interface_->SetAudioCallback(output_callback_) != S_OK)
             throw std::runtime_error("SetAudioCallback failed.");
 
+#ifdef _WIN32
+        // Create an IDeckLinkVideoConversion interface object to provide pixel format conversion of video frame.
+        result = CoCreateInstance(CLSID_CDeckLinkVideoConversion, NULL, CLSCTX_ALL, IID_IDeckLinkVideoConversion, (void**)frame_converter_);
+        if (FAILED(result))
+        {
+            //throw std::runtime_error("A DeckLink Video Conversion interface could not be created.");
+        }
+#else
+
+        frame_converter_ = CreateVideoConversionInstance();
+
+#endif
+
         bSuccess = true;
 
         query_display_modes();
 
     } catch (std::exception & e) {
+
+        std::cerr << "DecklinkOutput::init_decklink() failed: " << e.what() << "\n";
 
         report_error(e.what());
 
@@ -234,8 +254,7 @@ bool DecklinkOutput::init_decklink()
 
     }
 
-    frame_converter_ = CreateVideoConversionInstance();
-	
+
 	return bSuccess;
 }
 
@@ -371,7 +390,7 @@ bool DecklinkOutput::start_sdi_output()
         // Set the audio output mode
         if (decklink_output_interface_->EnableAudioOutput(
             bmdAudioSampleRate48kHz,
-            16, // channel bitdepth
+            bmdAudioSampleType16bitInteger,
             2, // num channels
             bmdAudioOutputStreamTimestamped) != S_OK) 
         {
