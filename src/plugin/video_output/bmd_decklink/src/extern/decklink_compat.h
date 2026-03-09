@@ -37,8 +37,9 @@ inline void decklink_free_string(BSTR str) { ::SysFreeString(str); }
 
 #else // Linux
 
-  inline std::string decklink_string_to_std(BSTR* str) { return str ? str : ""; }
-  inline void decklink_free_string(const char*) { /* Linux SDK manages string lifetime */ }
   #define DECKLINK_STR const char*
+  inline std::string decklink_string_to_std(DECKLINK_STR str) { return str ? str : ""; }
+  inline void decklink_free_string(DECKLINK_STR) { /* Linux SDK manages string lifetime */ }
+  #define BOOL bool
 
 #endif

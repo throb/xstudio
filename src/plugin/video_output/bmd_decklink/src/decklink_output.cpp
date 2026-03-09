@@ -1,13 +1,94 @@
 #include "decklink_output.hpp"
 #include "decklink_plugin.hpp"
-#include "extern/decklink_compat.h"
 #include "xstudio/utility/logging.hpp"
 #include "xstudio/utility/chrono.hpp"
 #include "xstudio/enums.hpp"
 #include <iostream>
 #include <half.h>
 
+#ifdef __linux__
+#include <dlfcn.h>
+#define kDeckLinkAPI_Name "libDeckLinkAPI.so"
+#endif
+
 using namespace xstudio::bm_decklink_plugin_1_0;
+
+namespace {
+
+    class LogBot {
+        public:
+        std::map<std::string, std::vector<int64_t>> frame_times_;
+        void log(const std::string l, int64_t t) {
+            frame_times_[l].push_back(t);
+            if ((frame_times_[l].size()%24) == 0) {
+                int64_t total = 0;
+                for (auto v : frame_times_[l]) total += v;
+                std::cerr << "Average time for " << l << ": " << double(total/frame_times_[l].size())/1000.0 << "ms\n";
+                frame_times_[l].clear();
+            }
+        }
+    };
+    static LogBot s_logBot;
+
+    class TimeLogger {
+        public:
+        TimeLogger(const std::string &label) : label_(label), start_time_(std::chrono::high_resolution_clock::now()) {}
+        ~TimeLogger() {
+            s_logBot.log(label_, std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::high_resolution_clock::now() - start_time_).count());
+        }
+        std::string label_;
+        std::chrono::high_resolution_clock::time_point start_time_;
+    };
+}
+
+void DecklinkOutput::check_decklink_installation()
+{
+
+    // here we try to open the decklink driver libs. If they are not installed
+    // on the system abort construction of the plugin (caught by plugin manager)
+    // The reason we do this is that we don't want the plugin to be available at
+    // all in the UI if the drivers aren't present, as it would just lead to 
+    // user confusion and support requests about why the plugin doesn't work.
+#ifdef __APPLE__
+    CFURLRef bundleURL = CFURLCreateWithFileSystemPath(kCFAllocatorDefault,
+        CFSTR("/Library/Frameworks/DeckLinkAPI.framework"), kCFURLPOSIXPathStyle, true);
+    bool drivers_found = false;
+    if (bundleURL) {
+        CFBundleRef bundle = CFBundleCreate(kCFAllocatorDefault, bundleURL);
+        drivers_found = (bundle != NULL);
+        if (bundle) CFRelease(bundle);
+        CFRelease(bundleURL);
+    }
+    if (!drivers_found) {
+		throw std::runtime_error("drivers not found.")		
+        return;
+    }
+#elif defined(__linux__)
+    if (!dlopen(kDeckLinkAPI_Name, RTLD_NOW | RTLD_GLOBAL)) {
+		throw std::runtime_error("drivers not found.");
+        return;
+    }
+#else // Windows
+	IDeckLinkIterator* pDLIterator = NULL;
+	HRESULT result; 
+	result = CoCreateInstance(CLSID_CDeckLinkIterator, NULL, CLSCTX_ALL, IID_IDeckLinkIterator, (void**)&pDLIterator);
+	if (FAILED(result))
+	{
+		throw std::runtime_error("drivers not found.")		
+	}
+
+	if (pDLIterator->Next(&pDL) != S_OK)
+	{
+        if (pDL != NULL)
+		{
+            pDL->Release();
+            pDL = NULL;
+        }
+        throw std::runtime_error("no DeckLink devices found.");
+	}
+#endif	
+}
 
 /* RGB10BitVideoFrame class */
 
@@ -36,7 +117,15 @@ HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID 
 	*ppv = NULL;
 
 	// Obtain the IUnknown interface and compare it the provided REFIID
-    if (memcmp(&iid, &IID_IUnknown, sizeof(REFIID)) == 0)
+#ifdef __APPLE__
+	CFUUIDBytes iunknown = CFUUIDGetUUIDBytes(IUnknownUUID);
+	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
+#elif defined(__linux__)
+	static const REFIID iunknown = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x46};
+	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
+#else // Windows
+    if (memcmp(&iid, &IID_IUnknown, sizeof(REFIID)) == 0
+#endif
 	{
 		*ppv = this;
 		AddRef();
@@ -57,6 +146,9 @@ HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID 
 	}
 
 	return result;
+
+
+    
 }
 
 ULONG STDMETHODCALLTYPE RGB10BitVideoFrame::AddRef(void)
@@ -650,23 +742,28 @@ void DecklinkOutput::fill_decklink_video_frame(IDeckLinkVideoFrame* decklink_vid
                         decklink_video_frame->GetWidth(), decklink_video_frame->GetHeight());
                 } else if (decklink_video_frame->GetPixelFormat() == bmdFormat10BitRGB) {
 
-                    pixel_swizzler_.cpy16bitRGBA_to_10bitRGB(pFrame, src_buf, num_pix);
+                    TimeLogger l("RGBA16_to_10bitRGB");
+                    pixel_swizzler_.copy_frame_buffer_10bit<RGBA16_to_10bitRGB>(pFrame, src_buf, num_pix);
 
                 } else if (decklink_video_frame->GetPixelFormat() == bmdFormat10BitRGBXLE) {
 
-                    pixel_swizzler_.cpy16bitRGBA_to_10bitRGBXLE(pFrame, src_buf, num_pix);
+                    TimeLogger l("RGBA16_to_10bitRGBXLE");
+                    pixel_swizzler_.copy_frame_buffer_10bit<RGBA16_to_10bitRGBXLE>(pFrame, src_buf, num_pix);
 
                 } else if (decklink_video_frame->GetPixelFormat() == bmdFormat10BitRGBX) {
 
-                    pixel_swizzler_.cpy16bitRGBA_to_10bitRGBX(pFrame, src_buf, num_pix);
+                    TimeLogger l("RGBA16_to_10bitRGBX");
+                    pixel_swizzler_.copy_frame_buffer_10bit<RGBA16_to_10bitRGBX>(pFrame, src_buf, num_pix);
 
                 } else if (decklink_video_frame->GetPixelFormat() == bmdFormat12BitRGB) {
 
-                    pixel_swizzler_.cpy16bitRGBA_to_12bitRGB(pFrame, src_buf, num_pix);
+                    TimeLogger l("RGBA16_to_12bitRGB");
+                    pixel_swizzler_.copy_frame_buffer_12bit<RGBA16_to_12bitRGB>(pFrame, src_buf, num_pix);
 
                 } else if (decklink_video_frame->GetPixelFormat() == bmdFormat12BitRGBLE) {
 
-                    pixel_swizzler_.cpy16bitRGBA_to_12bitRGBLE(pFrame, src_buf, num_pix);
+                    TimeLogger l("RGBA16_to_12bitRGBLE");
+                    pixel_swizzler_.copy_frame_buffer_12bit<RGBA16_to_12bitRGBLE>(pFrame, src_buf, num_pix);
 
                 }
                 video_buffer->EndAccess(bmdBufferAccessReadAndWrite);

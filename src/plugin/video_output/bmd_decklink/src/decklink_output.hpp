@@ -19,6 +19,7 @@
 #include <deque>
 #include <vector>
 
+#include "extern/decklink_compat.h"
 #include "extern/DeckLinkAPI.h"
 
 #ifndef STDMETHODCALLTYPE
@@ -87,7 +88,7 @@ public:
 
 class BMDecklinkPlugin;
 
-class MockDecklinkOutput
+/*class MockDecklinkOutput
 {
 
 public:
@@ -123,7 +124,7 @@ public:
 	}	
 
 	void set_hdr_metadata(const HDRMetadata &) { }
-};
+};*/
 
 class DecklinkOutput
 {
@@ -132,6 +133,8 @@ public:
 
 	DecklinkOutput(BMDecklinkPlugin * decklink_xstudio_plugin);
 	~DecklinkOutput();
+
+	static void check_decklink_installation();
 
 	bool init_decklink();
 

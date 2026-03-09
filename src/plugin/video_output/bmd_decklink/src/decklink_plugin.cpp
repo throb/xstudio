@@ -21,11 +21,6 @@
 #include <ImfRgbaFile.h>
 #include <vector>
 
-#ifdef __linux__
-#include <dlfcn.h>
-#define kDeckLinkAPI_Name "libDeckLinkAPI.so"
-#endif
-
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -92,37 +87,21 @@ BMDecklinkPlugin::BMDecklinkPlugin(
     : ui::viewport::VideoOutputPlugin(cfg, init_settings, "BMDecklinkPlugin")
 {
 
-    // here we try to open the decklink driver libs. If they are not installed
-    // on the system abort construction of the plugin (caught by plugin manager)
-#ifdef __APPLE__
-    CFURLRef bundleURL = CFURLCreateWithFileSystemPath(kCFAllocatorDefault,
-        CFSTR("/Library/Frameworks/DeckLinkAPI.framework"), kCFURLPOSIXPathStyle, true);
-    bool drivers_found = false;
-    if (bundleURL) {
-        CFBundleRef bundle = CFBundleCreate(kCFAllocatorDefault, bundleURL);
-        drivers_found = (bundle != NULL);
-        if (bundle) CFRelease(bundle);
-        CFRelease(bundleURL);
-    }
-    if (!drivers_found)
-#endif
-#ifdef __linux__    
-	if (0) //!dlopen(kDeckLinkAPI_Name, RTLD_NOW|RTLD_GLOBAL))
-#endif
-#ifdef _WIN32
-    /*{
-        HMODULE hModule = LoadLibraryA("DeckLinkAPI.dll");
-        if (!hModule) {
-            spdlog::error("Failed to load DeckLinkAPI.dll");
-        }
-    }*/
-    if (0)
-#endif
-	{
+    // Here we check that the Decklink drivers are installed. If not, we log a 
+    // message and disable the plugin by throwing an exception in the constructor
+    // which will prevent the plugin from being created. This prevents the SDI
+    // UI component from appearing in xSTUDIO and confusing the user when they
+    // don't have a DeckLink device or drivers installed.
+    try {
+
+        DecklinkOutput::check_decklink_installation();
+
+    } catch (const std::exception &e) {
+
 		send_exit(this, caf::exit_reason::user_shutdown);
-      	spdlog::info("Blackmagic Decklink SDI output disabled: drivers not found.");
-        return;
-	}
+        spdlog::info("Blackmagic Decklink SDI output disabled: {}", e.what());
+        throw;
+    }
 
     // add attributes used for configuring the SDI output
     pixel_formats_ = add_string_choice_attribute("Pixel Format", "Pix Fmt", "10 bit YUV", utility::map_key_to_vec(bmd_pixel_formats));
