@@ -335,18 +335,12 @@ void BMDecklinkPlugin::initialise() {
 
         // We register the UI here
         register_viewport_dockable_widget(
-            "SDI Output Controls",
+            "SDI Output Controls 2",
             "qrc:/bmd_icons/sdi-logo.svg",   // icon for the button to activate the tool
             "Show/Hide SDI Output Controls", // tooltip for the button,
             10.0f,                           // button position in the buttons bar
             true,
-            // qml code to create the left/right dockable widget
-            R"(
-                import QtQuick
-                import BlackmagicSDI 1.0
-                DecklinkSettingsVerticalWidget {
-                }
-                )",
+            "", // no dockable left/right widget
             // qml code to create the top/bottom dockable widget
             R"(
                 import QtQuick

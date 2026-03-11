@@ -26,7 +26,7 @@ namespace xstudio {
 
     public:
 
-        SimpleThreadPool(const int num_threads = 1) {//std::max(8, static_cast<int>(std::thread::hardware_concurrency() / 2))) {
+        SimpleThreadPool(const int num_threads = std::max(8, static_cast<int>(std::thread::hardware_concurrency() / 2))) {
             for (int i = 0; i < num_threads; ++i) {
                 threads_.emplace_back(std::thread(&SimpleThreadPool::run, this));
             }
@@ -122,14 +122,6 @@ struct RGBA16_to_10bitRGBX : public JobFunc {
 
 struct RGBA16_to_10bitRGBXLE : public JobFunc {
     RGBA16_to_10bitRGBXLE(uint16_t * src, uint32_t * dst, size_t n) : _src(src), _dst(dst), n(n) {}
-    uint16_t * _src;
-    uint32_t * _dst;
-    size_t n;
-    void doit() override;
-};
-
-struct RGBA16_to_10bitRGBLE : public JobFunc {
-    RGBA16_to_10bitRGBLE(uint16_t * src, uint32_t * dst, size_t n) : _src(src), _dst(dst), n(n) {}
     uint16_t * _src;
     uint32_t * _dst;
     size_t n;

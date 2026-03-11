@@ -69,7 +69,7 @@ Item{id: actionDiv
                 //enabled: button_enabled
                 onClicked: {
                     var isHidden = isActive
-                    toggle_dockable_widget(title)
+                    toggle_dockable_widget(title, left_right_dock_widget_qml_code != undefined)
                     // set the 'activated' role data. This will send a message
                     // to the backend Module that the dockable widget has been
                     // either hidden or shown
@@ -95,7 +95,7 @@ Item{id: actionDiv
                     if (typeof userData == "object" && typeof userData.context == "string") {
                         if (userData.context == view.name) {
                             var isHidden = isActive
-                            toggle_dockable_widget(title)
+                            toggle_dockable_widget(title, left_right_dock_widget_qml_code != undefined)
                             activated = isHidden ? 0 : 1
                         }
                     }

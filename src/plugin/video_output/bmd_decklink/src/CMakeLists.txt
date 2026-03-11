@@ -82,14 +82,7 @@ qt_add_qml_module(${PROJECT_NAME}
 	RESOURCE_PREFIX /
 	PLUGIN_TARGET ${PROJECT_NAME}	
 	QML_FILES
-		BlackmagicSDI/DecklinkIntegerSetting.qml
-		BlackmagicSDI/DecklinkMultichoiceSetting.qml
-		BlackmagicSDI/DecklinkSettingsButton.qml
-		BlackmagicSDI/DecklinkSettingsDialog.qml
 		BlackmagicSDI/DecklinkSettingsHorizontalWidget.qml
-		BlackmagicSDI/DecklinkSettingsVerticalWidget.qml
-		BlackmagicSDI/DecklinkStatusIndicator.qml
-		BlackmagicSDI/DecklinkToggleSetting.qml
 )
 
 # Platform-specific link dependencies

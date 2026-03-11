@@ -2397,6 +2397,7 @@ Attribute *Module::register_viewport_dockable_widget(
             Attribute::LeftRightDockWidgetQmlCode, left_right_dockable_widget_qml);
     }
     if (!top_bottom_dockable_widget_qml.empty()) {
+        std::cerr << "YANGTZE " << top_bottom_dockable_widget_qml << "\n";
         attr->set_role_data(
             Attribute::TopBottomDockWidgetQmlCode, top_bottom_dockable_widget_qml);
     }

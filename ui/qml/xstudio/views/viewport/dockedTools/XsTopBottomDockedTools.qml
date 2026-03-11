@@ -87,6 +87,7 @@ XsListView {
             onWidgetNameChanged: {
                 var idx = dockables.searchRecursive(widgetName, "title")
                 var source = dockables.get(idx, "top_bottom_dock_widget_qml_code")
+                console.log("FOO", source)
                 if (source != undefined && source != "") {
                     dynamic_widget = Qt.createQmlObject(source, container)
                 } else if (source == undefined) {

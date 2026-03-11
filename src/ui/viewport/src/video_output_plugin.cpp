@@ -41,7 +41,6 @@ void VideoOutputPlugin::finalise() {
     // create offscreen viewports for us
     auto studio_ui = system().registry().template get<caf::actor>(studio_ui_registry);
 
-    std::cerr << "OIOI\n";
     // tell the studio actor to create an offscreen viewport. It will send
     // us the resulting actor asynchronously as a message which our message
     // handler above will receive

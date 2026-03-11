@@ -75,18 +75,20 @@ void DecklinkOutput::check_decklink_installation()
 	result = CoCreateInstance(CLSID_CDeckLinkIterator, NULL, CLSCTX_ALL, IID_IDeckLinkIterator, (void**)&pDLIterator);
 	if (FAILED(result))
 	{
-		throw std::runtime_error("drivers not found.")		
+		throw std::runtime_error("drivers not found.");
 	}
 
-	if (pDLIterator->Next(&pDL) != S_OK)
+    // If no device found, that will be caught later.
+    /*IDeckLink*	deckLink = nullptr;
+	if (pDLIterator->Next(&deckLink) != S_OK)
 	{
-        if (pDL != NULL)
+        if (deckLink != NULL)
 		{
-            pDL->Release();
-            pDL = NULL;
+            deckLink->Release();
+        } else {
+            throw std::runtime_error("no DeckLink devices found.");
         }
-        throw std::runtime_error("no DeckLink devices found.");
-	}
+	}*/
 #endif	
 }
 
@@ -124,7 +126,7 @@ HRESULT	STDMETHODCALLTYPE RGB10BitVideoFrame::QueryInterface(REFIID iid, LPVOID 
 	static const REFIID iunknown = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xC0,0x00,0x00,0x00,0x00,0x00,0x00,0x46};
 	if (memcmp(&iid, &iunknown, sizeof(REFIID)) == 0)
 #else // Windows
-    if (memcmp(&iid, &IID_IUnknown, sizeof(REFIID)) == 0
+    if (memcmp(&iid, &IID_IUnknown, sizeof(REFIID)) == 0)
 #endif
 	{
 		*ppv = this;
@@ -275,37 +277,46 @@ std::cerr << "Creating DeckLink Iterator\n";
 #else
         decklink_iterator = CreateDeckLinkIteratorInstance();
 #endif
+        std::cerr << "A\n";
         if (decklink_iterator == NULL)
         {
             throw std::runtime_error("This plugin requires the DeckLink drivers installed. Please install the Blackmagic DeckLink drivers to use the features of this plugin.");
         }
+        std::cerr << "A\n";
 
         if (decklink_iterator->Next(&decklink_interface_) != S_OK)
         {
             throw std::runtime_error("This plugin requires a DeckLink device. You will not be able to use the features of this plugin until a DeckLink device is installed.");
         }
+        std::cerr << "A\n";
         
         if (decklink_interface_->QueryInterface(IID_IDeckLinkOutput, (void**)&decklink_output_interface_) != S_OK) {
            throw std::runtime_error("QueryInterface failed.");
         }
-        
+                std::cerr << "A\n";
+
         output_callback_ = new AVOutputCallback(this);
         if (output_callback_ == NULL)
             throw std::runtime_error("Failed to create Video Output Callback.");
-        
+                std::cerr << "A\n";
+
         if (decklink_output_interface_->SetScheduledFrameCompletionCallback(output_callback_) != S_OK)
             throw std::runtime_error("SetScheduledFrameCompletionCallback failed.");
-        
+                std::cerr << "A\n";
+
         if (decklink_output_interface_->SetAudioCallback(output_callback_) != S_OK)
             throw std::runtime_error("SetAudioCallback failed.");
+        std::cerr << "A\n";
 
 #ifdef _WIN32
         // Create an IDeckLinkVideoConversion interface object to provide pixel format conversion of video frame.
-        result = CoCreateInstance(CLSID_CDeckLinkVideoConversion, NULL, CLSCTX_ALL, IID_IDeckLinkVideoConversion, (void**)frame_converter_);
+        result = CoCreateInstance(CLSID_CDeckLinkVideoConversion, NULL, CLSCTX_ALL, IID_IDeckLinkVideoConversion, (void**)&frame_converter_);
         if (FAILED(result))
         {
-            //throw std::runtime_error("A DeckLink Video Conversion interface could not be created.");
+            throw std::runtime_error("A DeckLink Video Conversion interface could not be created.");
         }
+        std::cerr << "A\n";
+
 #else
 
         frame_converter_ = CreateVideoConversionInstance();
@@ -313,8 +324,10 @@ std::cerr << "Creating DeckLink Iterator\n";
 #endif
 
         bSuccess = true;
+        std::cerr << "B\n";
 
         query_display_modes();
+        std::cerr << "C\n";
 
     } catch (std::exception & e) {
 
@@ -356,11 +369,16 @@ void DecklinkOutput::query_display_modes() {
     IDeckLinkDisplayMode*				display_mode = NULL;
 
     try {
-        
+        std::cerr << "G\n";
         // Get first avaliable video mode for Output
         if (decklink_output_interface_->GetDisplayModeIterator(&display_mode_iterator) == S_OK)
         {
+            std::cerr << "D\n";
+
             while (display_mode_iterator->Next(&display_mode) == S_OK) {
+
+                std::cerr << "K\n";
+
                 DECKLINK_STR modeName = nullptr;
                 display_mode->GetName(&modeName);
                 std::string buf = decklink_string_to_std(modeName);
