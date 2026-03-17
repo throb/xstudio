@@ -814,6 +814,115 @@ class XStudioAPIHandler(BaseHTTPRequestHandler):
 
         self._send_json({"selected": len(xs_uuids)})
 
+    def _timeline_create(self, body: dict) -> None:
+        """POST /api/timeline/create
+
+        Body: {
+            "name": "My Timeline",
+            "playlist": "playlist name",     // optional, defaults to viewed container
+            "paths": ["/path/to/media"],     // optional, media to add as clips
+            "media_uuids": ["uuid", ...],    // optional, existing media to add as clips
+            "view": true                     // optional, switch viewport to timeline
+        }
+        """
+        name = body.get("name", "New Timeline")
+        playlist_name = body.get("playlist")
+        paths = body.get("paths", [])
+        media_uuids = body.get("media_uuids", [])
+        view = body.get("view", True)
+
+        session = self.session
+
+        # Find target playlist
+        playlist = None
+        if playlist_name:
+            try:
+                for p in session.playlists:
+                    if p.name == playlist_name:
+                        playlist = p
+                        break
+            except Exception:
+                pass
+        else:
+            try:
+                vc = session.viewed_container
+                if vc and hasattr(vc, "create_timeline"):
+                    playlist = vc
+            except Exception:
+                pass
+
+        if playlist is None:
+            try:
+                _uuid, playlist = session.create_playlist(name + " Playlist")
+            except Exception:
+                return self._send_error_json("Failed to create playlist", 500)
+
+        # Add media from paths if provided
+        loaded_media = []
+        allowed_roots = getattr(self.server, "allowed_roots", [])
+        for p in paths:
+            safe = _validate_media_path(p, allowed_roots)
+            if not safe:
+                continue
+            try:
+                if os.path.isdir(safe):
+                    media_list = playlist.add_media_list(safe)
+                    loaded_media.extend(media_list or [])
+                else:
+                    m = playlist.add_media(safe)
+                    if m:
+                        loaded_media.append(m)
+            except Exception:
+                pass
+
+        # Collect existing media by UUID
+        if media_uuids and XsUuid is not None:
+            try:
+                all_media = playlist.media
+                uuid_set = set(media_uuids)
+                for m in all_media:
+                    if str(m.uuid) in uuid_set:
+                        loaded_media.append(m)
+            except Exception:
+                pass
+
+        # Create timeline
+        try:
+            _uuid, timeline = playlist.create_timeline(name=name, with_tracks=True)
+        except Exception:
+            return self._send_error_json("Failed to create timeline", 500)
+
+        # Add clips to first video track
+        clip_count = 0
+        if loaded_media:
+            try:
+                tracks = timeline.video_tracks
+                if tracks:
+                    track = tracks[0]
+                    for media in loaded_media:
+                        try:
+                            track.insert_clip(media)
+                            clip_count += 1
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # Optionally switch view to timeline
+        if view:
+            try:
+                session.set_on_screen_source(timeline)
+                session.viewed_container = timeline
+            except Exception:
+                pass
+
+        self._send_json({
+            "name": name,
+            "uuid": str(timeline.uuid) if hasattr(timeline, "uuid") else "",
+            "clips": clip_count,
+            "playlist": playlist.name,
+        })
+
     # ------------------------------------------------------------------
     # Route tables
     # ------------------------------------------------------------------
@@ -841,6 +950,7 @@ class XStudioAPIHandler(BaseHTTPRequestHandler):
         "/api/playlist/create": _playlist_create,
         "/api/playlist/view": _playlist_view,
         "/api/playlist/select": _playlist_select,
+        "/api/timeline/create": _timeline_create,
     }
 
     # ------------------------------------------------------------------
