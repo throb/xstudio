@@ -32,7 +32,7 @@ except ImportError:
 # Constants
 # ---------------------------------------------------------------------------
 
-_MAX_BODY_SIZE = 1_048_576  # 1 MB
+_MAX_BODY_SIZE = 10_485_760  # 10 MB
 _KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".api_key")
 
 
