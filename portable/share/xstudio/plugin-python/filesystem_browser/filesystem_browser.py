@@ -129,23 +129,23 @@ class FilesystemBrowserPlugin(PluginBase):
         # Menu item triggers this action
         # Removed manual callback to rely on hotkey_uuid linkage 
         # which should toggle the panel automatically if registered correctly.
-        self.insert_menu_item(
-            "main menu bar",
-            "Filesystem Browser",
-            "View|Panels",
-            0.0,
-            hotkey_uuid=self.toggle_browser_action,
-            callback=self.toggle_browser_from_menu
-        )
+        # self.insert_menu_item(
+        #     "main menu bar",
+        #     "Filesystem Browser",
+        #     "View|Panels",
+        #     0.0,
+        #     hotkey_uuid=self.toggle_browser_action,
+        #     callback=self.toggle_browser_from_menu
+        # )
 
         # Add menu item to open as floating window
-        self.insert_menu_item(
-            "main menu bar",
-            "Browser Open",
-            "Plugins",
-            0.1,
-            callback=self.open_floating_browser
-        )
+        # self.insert_menu_item(
+        #     "main menu bar",
+        #     "Browser Open",
+        #     "Plugins",
+        #     0.1,
+        #     callback=self.open_floating_browser
+        # )
         
         # Register the panel, passing the action
         self.register_ui_panel_qml(
