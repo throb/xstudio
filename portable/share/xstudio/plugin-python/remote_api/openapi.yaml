@@ -17,7 +17,7 @@ info:
 
     ## Rate Limits
     No explicit rate limiting is enforced, but the server is single-threaded
-    per request. Request bodies are limited to 1 MB.
+    per request. Request bodies are limited to 10 MB.
 
     ## CORS
     CORS headers are only emitted for origins explicitly configured in the
@@ -761,6 +761,92 @@ paths:
                   value:
                     error: "Selection failed"
 
+  /api/timeline/create:
+    post:
+      tags: [Playlists]
+      summary: Create a timeline
+      description: |
+        Create a timeline in a playlist, optionally populating it with clips
+        from file paths or existing media UUIDs. By default switches the
+        viewport to the new timeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  default: "New Timeline"
+                  description: Timeline name
+                playlist:
+                  type: string
+                  description: Target playlist name. Uses viewed container if omitted.
+                paths:
+                  type: array
+                  items:
+                    type: string
+                  description: Media file paths to add as clips
+                media_uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: UUIDs of existing media in the playlist to add as clips
+                view:
+                  type: boolean
+                  default: true
+                  description: Switch viewport to the new timeline
+            examples:
+              empty:
+                summary: Empty timeline
+                value:
+                  name: "My Timeline"
+              with_paths:
+                summary: Timeline from media paths
+                value:
+                  name: "Shot Review"
+                  paths:
+                    - "L:/shots/comp.%04d.exr=1000-1080"
+                    - "L:/shots/comp_v2.%04d.exr=1000-1080"
+              with_uuids:
+                summary: Timeline from existing media
+                value:
+                  name: "Compare TL"
+                  playlist: "ShotGrid Review"
+                  media_uuids: ["550e8400-e29b-41d4-a716-446655440000"]
+      responses:
+        "200":
+          description: Timeline created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  uuid:
+                    type: string
+                  clips:
+                    type: integer
+                  playlist:
+                    type: string
+              example:
+                name: "Shot Review"
+                uuid: "550e8400-e29b-41d4-a716-446655440000"
+                clips: 2
+                playlist: "Shot Review Playlist"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          description: Failed to create timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -1145,7 +1231,7 @@ components:
             error: "No active playhead - view a playlist first"
 
     BodyTooLarge:
-      description: Request body exceeds 1 MB limit
+      description: Request body exceeds 10 MB limit
       content:
         application/json:
           schema:

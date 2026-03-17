@@ -603,6 +603,50 @@ curl -s -H "X-API-Key: $KEY" http://localhost:45678/api/media
 }
 ```
 
+### Create a Timeline
+
+Create an empty timeline:
+
+```bash
+curl -s -X POST -H "X-API-Key: $KEY" \
+  -d '{"name": "My Timeline"}' \
+  http://localhost:45678/api/timeline/create
+```
+
+Create a timeline populated with media:
+
+```bash
+curl -s -X POST -H "X-API-Key: $KEY" \
+  -d '{
+    "name": "Shot Review",
+    "paths": [
+      "L:/shots/CS0900_comp_v006/exr/CS0900_comp_v006.%04d.exr=1000-1080",
+      "L:/shots/CS0900_comp_v007/exr/CS0900_comp_v007.%04d.exr=1000-1080"
+    ]
+  }' \
+  http://localhost:45678/api/timeline/create
+```
+
+```python
+requests.post(f"{BASE}/api/timeline/create", headers=HEADERS, json={
+    "name": "Shot Review",
+    "paths": ["L:/shots/comp_v006.%04d.exr=1000-1080"],
+    "view": True  # switch viewport to the timeline
+})
+```
+
+```json
+{
+  "name": "Shot Review",
+  "uuid": "a1b2c3d4-...",
+  "clips": 2,
+  "playlist": "Shot Review Playlist"
+}
+```
+
+You can also build a timeline from media already in a playlist by passing `media_uuids`
+instead of `paths`. Set `"view": false` to create the timeline without switching the viewport.
+
 ---
 
 ## 7. Real-Time Events (SSE)
@@ -872,5 +916,5 @@ reconnect automatically when this happens.
 
 ### Request body too large (413)
 
-The API enforces a 1 MB limit on request bodies. If you are sending a very
+The API enforces a 10 MB limit on request bodies. If you are sending a very
 long list of paths, split them across multiple requests.

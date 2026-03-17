@@ -123,7 +123,7 @@ API_KEY=$(cat portable/share/xstudio/plugin-python/remote_api/.api_key)
 - API key verified with constant-time comparison
 - CORS restricted to an explicit origin allowlist (no wildcards)
 - `POST /api/media/add` validates paths against allowed roots; UNC paths are always blocked
-- Request body limited to 1 MB
+- Request body limited to 10 MB
 - No stack traces in error responses
 
 ### Endpoints
