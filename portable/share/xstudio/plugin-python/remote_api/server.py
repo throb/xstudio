@@ -273,6 +273,58 @@ class XStudioAPIHandler(BaseHTTPRequestHandler):
     # GET route handlers
     # ------------------------------------------------------------------
 
+    def _get_docs(self) -> None:
+        """GET /api/docs -- Swagger UI for interactive API documentation."""
+        html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>xSTUDIO API</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+    SwaggerUIBundle({
+        url: '/api/openapi.yaml',
+        dom_id: '#swagger-ui',
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+        layout: "BaseLayout",
+        deepLinking: true,
+        defaultModelsExpandDepth: 2,
+        requestInterceptor: (req) => {
+            return req;
+        }
+    })
+    </script>
+</body>
+</html>"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(html)
+
+    def _get_openapi_spec(self) -> None:
+        """GET /api/openapi.yaml -- Serve the OpenAPI specification."""
+        spec_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "openapi.yaml"
+        )
+        try:
+            with open(spec_path, "r", encoding="utf-8") as fh:
+                body = fh.read().encode("utf-8")
+        except FileNotFoundError:
+            return self._send_error_json("OpenAPI spec not found", 404)
+        except Exception:
+            return self._send_error_json("Failed to read OpenAPI spec", 500)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/yaml; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._send_cors_headers()
+        self.end_headers()
+        self.wfile.write(body)
+
     def _get_status(self) -> None:
         """GET /api/status"""
         version = "unknown"
@@ -767,6 +819,8 @@ class XStudioAPIHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     _GET_ROUTES: dict[str, Any] = {
+        "/api/docs": _get_docs,
+        "/api/openapi.yaml": _get_openapi_spec,
         "/api/status": _get_status,
         "/api/session": _get_session,
         "/api/playlists": _get_playlists,
