@@ -33,6 +33,8 @@ Events for real-time state updates.
 | `GET /api/media` | List all media across all playlists |
 | `GET /api/playhead` | Get current playback state |
 | `GET /api/events` | Server-Sent Events stream |
+| `GET /api/docs` | Interactive Swagger UI |
+| `GET /api/openapi.yaml` | OpenAPI 3.0 specification |
 
 ### POST Endpoints
 
@@ -49,6 +51,7 @@ Events for real-time state updates.
 | `POST /api/playlist/create` | Create a new playlist |
 | `POST /api/playlist/view` | Switch viewport to a playlist |
 | `POST /api/playlist/select` | Select specific media for comparison |
+| `POST /api/timeline/create` | Create a timeline with optional clips from paths or media UUIDs |
 
 ---
 

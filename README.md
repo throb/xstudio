@@ -138,6 +138,8 @@ API_KEY=$(cat portable/share/xstudio/plugin-python/remote_api/.api_key)
 | `/api/media` | Flat list of all media across all playlists |
 | `/api/playhead` | Playback state: playing, position, compare mode, loop range |
 | `/api/events` | SSE stream at ~4 Hz, emits state diffs for 5 minutes then reconnect |
+| `/api/docs` | Interactive Swagger UI |
+| `/api/openapi.yaml` | OpenAPI 3.0 specification |
 
 #### POST
 
@@ -154,6 +156,7 @@ API_KEY=$(cat portable/share/xstudio/plugin-python/remote_api/.api_key)
 | `/api/playlist/create` | `{"name": "..."}` | Create a new playlist |
 | `/api/playlist/view` | `{"name": "..."} or {"uuid": "..."}` | Switch viewport to a playlist |
 | `/api/playlist/select` | `{"uuids": ["...", ...]}` | Select specific media items |
+| `/api/timeline/create` | `{"name": "...", "paths": [...], "media_uuids": [...]}` | Create a timeline with optional clips |
 
 ### Quick Start
 
