@@ -1,0 +1,7 @@
+{
+    "port": 45678,
+    "bind_address": "127.0.0.1",
+    "api_key": "",
+    "cors_origins": [],
+    "allowed_roots": []
+}

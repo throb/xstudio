@@ -1,0 +1,1240 @@
+openapi: "3.0.3"
+info:
+  title: xSTUDIO Remote API
+  version: "1.0.0"
+  description: |
+    REST API for controlling xSTUDIO programmatically. Enables AI agents,
+    scripts, and other xSTUDIO instances to control playback, load media,
+    and synchronize state over HTTP.
+
+    ## Authentication
+    All requests require an API key via the `X-API-Key` header.
+    The key is auto-generated on first launch and saved to `.api_key`
+    in the plugin directory.
+
+    ## Base URL
+    Default: `http://127.0.0.1:45678`
+
+    ## Rate Limits
+    No explicit rate limiting is enforced, but the server is single-threaded
+    per request. Request bodies are limited to 10 MB.
+
+    ## CORS
+    CORS headers are only emitted for origins explicitly configured in the
+    server's `cors_origins` allowlist.
+  contact:
+    name: xSTUDIO Fork
+    url: https://github.com/throb/xstudio
+
+tags:
+  - name: Status
+    description: Server health and version information
+  - name: Session
+    description: Session state, playlists overview, and viewed container
+  - name: Playback
+    description: Playhead control -- play, pause, seek, step, compare, loop
+  - name: Media
+    description: Add media files and directories to playlists
+  - name: Playlists
+    description: Create, list, view, and select within playlists
+  - name: Events
+    description: Server-Sent Events stream for real-time state updates
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /api/status:
+    get:
+      operationId: getStatus
+      summary: Get server status
+      description: |
+        Returns basic server health information including whether xSTUDIO is
+        running, its version string, and the port the API is listening on.
+      tags:
+        - Status
+      responses:
+        "200":
+          description: Server status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+              example:
+                running: true
+                version: "0.12.0"
+                api_port: 45678
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/session:
+    get:
+      operationId: getSession
+      summary: Get session overview
+      description: |
+        Returns a summary of the current session including all playlists
+        (with media counts) and the currently viewed container.
+      tags:
+        - Session
+      responses:
+        "200":
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+              example:
+                playlists:
+                  - name: "Shot Review"
+                    uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                    media_count: 12
+                  - name: "Comp Dailies"
+                    uuid: "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+                    media_count: 5
+                viewed_container:
+                  name: "Shot Review"
+                  uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playlists:
+    get:
+      operationId: getPlaylists
+      summary: List all playlists with media details
+      description: |
+        Returns all playlists in the session with full media item details
+        including names, UUIDs, online status, and flag metadata.
+      tags:
+        - Playlists
+      responses:
+        "200":
+          description: Playlist listing with media details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistsDetailResponse"
+              example:
+                playlists:
+                  - name: "Shot Review"
+                    uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                    media_count: 2
+                    media:
+                      - name: "FW9119_comp_v001"
+                        uuid: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+                        is_online: true
+                        flag_colour: "green"
+                        flag_text: "approved"
+                      - name: "FW9120_comp_v002"
+                        uuid: "d4e5f6a7-b8c9-0123-defa-234567890123"
+                        is_online: true
+                        flag_colour: ""
+                        flag_text: ""
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/media:
+    get:
+      operationId: getMedia
+      summary: List all media across playlists
+      description: |
+        Returns a flat list of every media item across all playlists,
+        including the parent playlist name for each item.
+      tags:
+        - Media
+      responses:
+        "200":
+          description: All media items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaListResponse"
+              example:
+                media:
+                  - name: "FW9119_comp_v001"
+                    uuid: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+                    playlist: "Shot Review"
+                    is_online: true
+                    flag_colour: "green"
+                    flag_text: "approved"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead:
+    get:
+      operationId: getPlayhead
+      summary: Get current playhead state
+      description: |
+        Returns the state of the playhead on the currently viewed container,
+        including play/pause state, frame position, compare mode, and loop
+        range settings.
+      tags:
+        - Playback
+      responses:
+        "200":
+          description: Current playhead state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayheadState"
+              example:
+                playing: false
+                position: 1042
+                compare_mode: "Off"
+                play_forward: true
+                use_loop_range: false
+                loop_in_point: 1000
+                loop_out_point: 1080
+                media_frame: 42
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No active container
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "No active container"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/events:
+    get:
+      operationId: getEvents
+      summary: Server-Sent Events stream
+      description: |
+        Opens a Server-Sent Events (SSE) connection that pushes state
+        snapshots at approximately 4 Hz. Only changed states are sent.
+        The connection automatically closes after 5 minutes and sends a
+        `timeout` event with `{"reconnect": true}`.
+
+        **Event format:**
+        ```
+        data: {"timestamp": 1710000000.0, "viewed_container": {...}, "playhead": {...}}
+        ```
+
+        The `timeout` event uses a named event type:
+        ```
+        event: timeout
+        data: {"reconnect": true}
+        ```
+      tags:
+        - Events
+      responses:
+        "200":
+          description: SSE stream opened
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Newline-delimited SSE events
+              example: |
+                data: {"timestamp": 1710000000.0, "viewed_container": {"name": "Shot Review", "uuid": "a1b2c3d4-..."}, "playhead": {"playing": false, "position": 1042, "compare_mode": "Off", "media_frame": 42}}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/playhead/play:
+    post:
+      operationId: playheadPlay
+      summary: Start playback
+      description: Sets the playhead to playing state.
+      tags:
+        - Playback
+      requestBody:
+        description: No body required (empty object accepted).
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+            example: {}
+      responses:
+        "200":
+          description: Playback started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayingResponse"
+              example:
+                playing: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead/pause:
+    post:
+      operationId: playheadPause
+      summary: Pause playback
+      description: Sets the playhead to paused state.
+      tags:
+        - Playback
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+            example: {}
+      responses:
+        "200":
+          description: Playback paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayingResponse"
+              example:
+                playing: false
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead/toggle:
+    post:
+      operationId: playheadToggle
+      summary: Toggle play/pause
+      description: Toggles the playhead between playing and paused states.
+      tags:
+        - Playback
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+            example: {}
+      responses:
+        "200":
+          description: Toggled state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayingResponse"
+              example:
+                playing: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead/seek:
+    post:
+      operationId: playheadSeek
+      summary: Seek to a specific frame
+      description: |
+        Moves the playhead to an absolute frame position. The frame number
+        is in timeline (playlist) space, not media-local space.
+      tags:
+        - Playback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SeekRequest"
+            example:
+              frame: 1042
+      responses:
+        "200":
+          description: Seek completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionResponse"
+              example:
+                position: 1042
+        "400":
+          description: Missing or invalid frame parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missing:
+                  summary: Frame not provided
+                  value:
+                    error: "'frame' is required"
+                invalid:
+                  summary: Non-integer frame
+                  value:
+                    error: "'frame' must be an integer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead/step:
+    post:
+      operationId: playheadStep
+      summary: Step forward or backward by frames
+      description: |
+        Moves the playhead by a relative number of frames. Use positive
+        values to step forward and negative values to step backward.
+        Defaults to 1 frame if `frames` is omitted.
+      tags:
+        - Playback
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StepRequest"
+            examples:
+              forward:
+                summary: Step forward 5 frames
+                value:
+                  frames: 5
+              backward:
+                summary: Step backward 1 frame
+                value:
+                  frames: -1
+              default:
+                summary: Step forward 1 frame (default)
+                value: {}
+      responses:
+        "200":
+          description: Step completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionResponse"
+              example:
+                position: 1047
+        "400":
+          description: Invalid frames parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "'frames' must be an integer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead/compare:
+    post:
+      operationId: playheadCompare
+      summary: Set compare mode
+      description: |
+        Sets the viewport compare mode for side-by-side or layered media
+        comparison. Use `"Off"` to disable comparison.
+      tags:
+        - Playback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompareRequest"
+            example:
+              mode: "A/B"
+      responses:
+        "200":
+          description: Compare mode set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompareModeResponse"
+              example:
+                compare_mode: "A/B"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playhead/loop:
+    post:
+      operationId: playheadLoop
+      summary: Configure loop range
+      description: |
+        Enables or disables loop playback and optionally sets the in/out
+        points. All fields are optional -- only provided fields are changed.
+      tags:
+        - Playback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoopRequest"
+            examples:
+              enable_with_range:
+                summary: Enable loop with range
+                value:
+                  enabled: true
+                  in: 1000
+                  out: 1040
+              disable:
+                summary: Disable loop
+                value:
+                  enabled: false
+              adjust_range:
+                summary: Adjust range only
+                value:
+                  in: 1010
+                  out: 1050
+      responses:
+        "200":
+          description: Loop settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoopResponse"
+              example:
+                use_loop_range: true
+                loop_in_point: 1000
+                loop_out_point: 1040
+        "400":
+          description: Invalid in/out values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "'in' must be an integer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NoPlayhead"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/media/add:
+    post:
+      operationId: mediaAdd
+      summary: Add media to a playlist
+      description: |
+        Loads one or more media files or directories into a playlist.
+        If the playlist does not exist, it is created. After loading,
+        the viewport switches to show that playlist.
+
+        Accepts either a single `path` string or a `paths` array.
+        If `playlist` is omitted, defaults to `"Remote API"`.
+
+        Paths are validated against a configurable allowlist and UNC
+        paths are always blocked. Image sequence patterns
+        (`%04d`, `####`, frame ranges like `=1000-1080`) are supported.
+      tags:
+        - Media
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MediaAddRequest"
+            examples:
+              single_file:
+                summary: Single EXR file
+                value:
+                  path: "L:/tdm/shots/fw/9119/comp/images/FW9119_comp_v001.exr"
+                  playlist: "Shot Review"
+              sequence:
+                summary: Image sequence with frame range
+                value:
+                  path: "L:/tdm/shots/fw/9119/comp/images/FW9119_comp_v001/exr/FW9119_comp_v001.%04d.exr=1000-1080"
+              multiple:
+                summary: Multiple paths
+                value:
+                  paths:
+                    - "L:/tdm/shots/fw/9119/comp/images/FW9119_comp_v001.exr"
+                    - "L:/tdm/shots/fw/9120/comp/images/FW9120_comp_v002.exr"
+                  playlist: "Comp Dailies"
+              directory:
+                summary: Load entire directory
+                value:
+                  path: "L:/tdm/shots/fw/9119/comp/images/"
+      responses:
+        "200":
+          description: Media loaded (may include partial failures)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MediaAddResponse"
+              example:
+                loaded:
+                  - name: "FW9119_comp_v001"
+                    uuid: "c3d4e5f6-a7b8-9012-cdef-123456789012"
+                  - error: "Path blocked by policy"
+                    path: "//server/share/file.exr"
+                count: 1
+                playlist: "Shot Review"
+        "400":
+          description: No path provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "'path' or 'paths' is required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: All paths rejected by validation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "All paths were rejected by path validation"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playlist/create:
+    post:
+      operationId: playlistCreate
+      summary: Create a new playlist
+      description: |
+        Creates an empty playlist with the given name. If `name` is omitted,
+        defaults to `"New Playlist"`.
+      tags:
+        - Playlists
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistCreateRequest"
+            example:
+              name: "VFX Review 2026-03-17"
+      responses:
+        "200":
+          description: Playlist created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistIdentifier"
+              example:
+                name: "VFX Review 2026-03-17"
+                uuid: "e5f6a7b8-c9d0-1234-efab-345678901234"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playlist/view:
+    post:
+      operationId: playlistView
+      summary: Switch viewport to a playlist
+      description: |
+        Sets the on-screen source and viewed container to the specified
+        playlist. Identify the playlist by `name` or `uuid`.
+      tags:
+        - Playlists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistViewRequest"
+            examples:
+              by_name:
+                summary: View by name
+                value:
+                  name: "Shot Review"
+              by_uuid:
+                summary: View by UUID
+                value:
+                  uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      responses:
+        "200":
+          description: Viewport switched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistViewResponse"
+              example:
+                viewed:
+                  name: "Shot Review"
+                  uuid: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        "400":
+          description: Neither name nor uuid provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "'name' or 'uuid' is required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Playlist not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Playlist not found"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/playlist/select:
+    post:
+      operationId: playlistSelect
+      summary: Set media selection within a playlist
+      description: |
+        Sets the playhead selection to the given media UUIDs within the
+        currently viewed container. Requires the `xstudio.core` Python
+        module to be available.
+      tags:
+        - Playlists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistSelectRequest"
+            example:
+              uuids:
+                - "c3d4e5f6-a7b8-9012-cdef-123456789012"
+                - "d4e5f6a7-b8c9-0123-defa-234567890123"
+      responses:
+        "200":
+          description: Selection updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaylistSelectResponse"
+              example:
+                selected: 2
+        "400":
+          description: No UUIDs provided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "'uuids' is required"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No active container
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "No active container"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          description: Selection failed or xstudio.core unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                core_missing:
+                  summary: Python bindings unavailable
+                  value:
+                    error: "xstudio.core not available"
+                failed:
+                  summary: Selection operation failed
+                  value:
+                    error: "Selection failed"
+
+  /api/timeline/create:
+    post:
+      tags: [Playlists]
+      summary: Create a timeline
+      description: |
+        Create a timeline in a playlist, optionally populating it with clips
+        from file paths or existing media UUIDs. By default switches the
+        viewport to the new timeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  default: "New Timeline"
+                  description: Timeline name
+                playlist:
+                  type: string
+                  description: Target playlist name. Uses viewed container if omitted.
+                paths:
+                  type: array
+                  items:
+                    type: string
+                  description: Media file paths to add as clips
+                media_uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: UUIDs of existing media in the playlist to add as clips
+                view:
+                  type: boolean
+                  default: true
+                  description: Switch viewport to the new timeline
+            examples:
+              empty:
+                summary: Empty timeline
+                value:
+                  name: "My Timeline"
+              with_paths:
+                summary: Timeline from media paths
+                value:
+                  name: "Shot Review"
+                  paths:
+                    - "L:/shots/comp.%04d.exr=1000-1080"
+                    - "L:/shots/comp_v2.%04d.exr=1000-1080"
+              with_uuids:
+                summary: Timeline from existing media
+                value:
+                  name: "Compare TL"
+                  playlist: "ShotGrid Review"
+                  media_uuids: ["550e8400-e29b-41d4-a716-446655440000"]
+      responses:
+        "200":
+          description: Timeline created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  uuid:
+                    type: string
+                  clips:
+                    type: integer
+                  playlist:
+                    type: string
+              example:
+                name: "Shot Review"
+                uuid: "550e8400-e29b-41d4-a716-446655440000"
+                clips: 2
+                playlist: "Shot Review Playlist"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "500":
+          description: Failed to create timeline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key for authentication. Auto-generated on first launch and
+        saved to `.api_key` in the plugin directory. Pass it via the
+        `X-API-Key` request header.
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+
+    StatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+          description: Always `true` if the server is responding.
+        version:
+          type: string
+          description: xSTUDIO application version string.
+        api_port:
+          type: integer
+          description: TCP port the API server is listening on.
+
+    ContainerIdentifier:
+      type: object
+      properties:
+        name:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+
+    SessionResponse:
+      type: object
+      properties:
+        playlists:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaylistSummary"
+        viewed_container:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ContainerIdentifier"
+          description: The currently viewed playlist/container, or null.
+
+    PlaylistSummary:
+      type: object
+      properties:
+        name:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+        media_count:
+          type: integer
+
+    MediaItem:
+      type: object
+      required:
+        - name
+        - uuid
+      properties:
+        name:
+          type: string
+          description: Display name of the media item.
+        uuid:
+          type: string
+          format: uuid
+        is_online:
+          type: boolean
+          description: Whether the media source is accessible.
+        flag_colour:
+          type: string
+          description: Review flag colour (e.g. "green", "red", "").
+        flag_text:
+          type: string
+          description: Review flag annotation text.
+
+    MediaItemWithPlaylist:
+      allOf:
+        - $ref: "#/components/schemas/MediaItem"
+        - type: object
+          properties:
+            playlist:
+              type: string
+              description: Name of the parent playlist.
+
+    PlaylistDetail:
+      type: object
+      properties:
+        name:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+        media_count:
+          type: integer
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaItem"
+
+    PlaylistsDetailResponse:
+      type: object
+      properties:
+        playlists:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaylistDetail"
+
+    MediaListResponse:
+      type: object
+      properties:
+        media:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaItemWithPlaylist"
+
+    PlayheadState:
+      type: object
+      properties:
+        playing:
+          type: boolean
+        position:
+          type: integer
+          description: Current timeline frame position.
+        compare_mode:
+          type: string
+          description: Compare mode (e.g. "Off", "A/B", "Grid", "Over").
+        play_forward:
+          type: boolean
+          description: Playback direction.
+        use_loop_range:
+          type: boolean
+          description: Whether loop playback is active.
+        loop_in_point:
+          type: integer
+          description: Loop start frame.
+        loop_out_point:
+          type: integer
+          description: Loop end frame.
+        media_frame:
+          type: integer
+          description: Frame number in media-local space.
+
+    PlayingResponse:
+      type: object
+      properties:
+        playing:
+          type: boolean
+
+    PositionResponse:
+      type: object
+      properties:
+        position:
+          type: integer
+
+    CompareModeResponse:
+      type: object
+      properties:
+        compare_mode:
+          type: string
+
+    LoopResponse:
+      type: object
+      properties:
+        use_loop_range:
+          type: boolean
+        loop_in_point:
+          type: integer
+        loop_out_point:
+          type: integer
+
+    SeekRequest:
+      type: object
+      required:
+        - frame
+      properties:
+        frame:
+          type: integer
+          description: Absolute frame number to seek to.
+
+    StepRequest:
+      type: object
+      properties:
+        frames:
+          type: integer
+          default: 1
+          description: Number of frames to step (negative to go backward).
+
+    CompareRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          default: "Off"
+          enum:
+            - "A/B"
+            - Grid
+            - Over
+            - "Off"
+          description: Viewport compare mode.
+
+    LoopRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Enable or disable loop playback.
+        in:
+          type: integer
+          description: Loop in-point frame number.
+        out:
+          type: integer
+          description: Loop out-point frame number.
+
+    MediaAddRequest:
+      type: object
+      properties:
+        path:
+          type: string
+          description: |
+            Single file or directory path. Supports image sequence
+            patterns (`%04d`, `####`) and frame range suffixes
+            (`=1000-1080`). Mutually exclusive with `paths`.
+        paths:
+          type: array
+          items:
+            type: string
+          description: |
+            Array of file or directory paths. Mutually exclusive with
+            `path`.
+        playlist:
+          type: string
+          default: "Remote API"
+          description: Target playlist name. Created if it does not exist.
+
+    MediaAddResultItem:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Media display name (present on success).
+        uuid:
+          type: string
+          format: uuid
+          description: Media UUID (present on success).
+        error:
+          type: string
+          description: Error message (present on failure).
+        path:
+          type: string
+          description: Source path (present on failure).
+
+    MediaAddResponse:
+      type: object
+      properties:
+        loaded:
+          type: array
+          items:
+            $ref: "#/components/schemas/MediaAddResultItem"
+          description: Per-path results. Each item has either name+uuid or error+path.
+        count:
+          type: integer
+          description: Number of successfully loaded media items.
+        playlist:
+          type: string
+          description: Name of the playlist media was loaded into.
+
+    PlaylistIdentifier:
+      type: object
+      properties:
+        name:
+          type: string
+        uuid:
+          type: string
+          format: uuid
+
+    PlaylistCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          default: "New Playlist"
+          description: Playlist display name.
+
+    PlaylistViewRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Playlist name to view.
+        uuid:
+          type: string
+          format: uuid
+          description: Playlist UUID to view.
+
+    PlaylistViewResponse:
+      type: object
+      properties:
+        viewed:
+          $ref: "#/components/schemas/ContainerIdentifier"
+
+    PlaylistSelectRequest:
+      type: object
+      required:
+        - uuids
+      properties:
+        uuids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Media UUIDs to select in the active container.
+
+    PlaylistSelectResponse:
+      type: object
+      properties:
+        selected:
+          type: integer
+          description: Number of items successfully selected.
+
+    SSEStateSnapshot:
+      type: object
+      description: State snapshot sent via SSE stream.
+      properties:
+        timestamp:
+          type: number
+          format: double
+          description: Unix timestamp of the snapshot.
+        viewed_container:
+          $ref: "#/components/schemas/ContainerIdentifier"
+        playhead:
+          type: object
+          properties:
+            playing:
+              type: boolean
+            position:
+              type: integer
+            compare_mode:
+              type: string
+            media_frame:
+              type: integer
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Unauthorized"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Internal server error"
+
+    NoPlayhead:
+      description: No active playhead (no playlist is being viewed)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "No active playhead - view a playlist first"
+
+    BodyTooLarge:
+      description: Request body exceeds 10 MB limit
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: "Request body too large"

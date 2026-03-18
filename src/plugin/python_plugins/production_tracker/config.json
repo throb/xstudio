@@ -1,0 +1,16 @@
+{
+    "default_backend": "shotgrid",
+    "shotgrid": {
+        "default_version_fields": [
+            "id", "code", "description", "created_at", "user",
+            "sg_status_list", "sg_path_to_frames", "sg_path_to_movie",
+            "frame_count", "frame_range", "image",
+            "entity", "project"
+        ],
+        "project_fields": ["id", "name", "sg_status"],
+        "sequence_fields": ["id", "code", "sg_status"],
+        "shot_fields": ["id", "code", "sg_status", "sg_sequence", "sg_cut_in", "sg_cut_out"],
+        "page_size": 100,
+        "active_project_statuses": ["Active"]
+    }
+}
