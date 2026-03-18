@@ -82,6 +82,11 @@ XsListView {
             }
         }
         DelegateChoice {
+            roleValue: "folder list"
+            XsFolderListPreference {
+            }
+        }
+        DelegateChoice {
             roleValue: "json"
             Item {
 

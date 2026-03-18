@@ -189,6 +189,7 @@
 	    <file>widgets/dialogs/preferences/delegates/XsColourPreference.qml</file>
 	    <file>widgets/dialogs/preferences/delegates/XsCompareModePref.qml</file>
 	    <file>widgets/dialogs/preferences/delegates/XsFilePreference.qml</file>
+	    <file>widgets/dialogs/preferences/delegates/XsFolderListPreference.qml</file>
 	    <file>widgets/dialogs/preferences/delegates/XsFloatPreference.qml</file>
 	    <file>widgets/dialogs/preferences/delegates/XsIntegerPreference.qml</file>
 	    <file>widgets/dialogs/preferences/delegates/XsJsonPreference.qml</file>
