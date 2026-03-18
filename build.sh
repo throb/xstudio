@@ -165,6 +165,27 @@ check_system_tools() {
         check_tool "$cmd" "$brew_pkg" "$apt_pkg" "$desc" || true
     done
 
+    # Check for autoconf-archive (provides m4 macros, no binary to check)
+    local ax_macro=""
+    case "$(uname -s)" in
+        Darwin)
+            ax_macro="$(brew --prefix autoconf-archive 2>/dev/null)/share/autoconf-archive/m4/ax_c_float_words_bigendian.m4"
+            if [[ ! -f "$ax_macro" ]]; then
+                # Also check homebrew share directly
+                ax_macro="/opt/homebrew/share/aclocal/ax_c_float_words_bigendian.m4"
+            fi
+            ;;
+        Linux)
+            ax_macro="/usr/share/aclocal/ax_c_float_words_bigendian.m4"
+            ;;
+    esac
+    if [[ -n "$ax_macro" ]] && [[ ! -f "$ax_macro" ]]; then
+        MISSING_TOOLS+=("autoconf-archive")
+        MISSING_BREW+=("autoconf-archive")
+        MISSING_APT+=("autoconf-archive")
+        err "autoconf-archive not found (needed to build Python via vcpkg)"
+    fi
+
     if [[ ${#MISSING_TOOLS[@]} -gt 0 ]]; then
         echo ""
         case "$(uname -s)" in
@@ -325,6 +346,13 @@ check_prereqs() {
 # ---------- Commands ----------
 do_configure() {
     check_prereqs
+
+    # Ensure git submodules are initialized
+    if git submodule status 2>/dev/null | grep -q '^-'; then
+        info "Initializing git submodules..."
+        git submodule update --init --recursive
+        ok "Submodules ready"
+    fi
 
     local preset
     preset="$(resolve_preset)"

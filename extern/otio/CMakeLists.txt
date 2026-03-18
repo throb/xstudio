@@ -1,6 +1,4 @@
-set(OTIO_PYTHON_INSTALL ON)
 set(OTIO_DEPENDENCIES_INSTALL OFF)
-set(OTIO_INSTALL_PYTHON_MODULES ON)
 set(OTIO_INSTALL_COMMANDLINE_TOOLS OFF)
 set(OTIO_FIND_IMATH ON)
 set(OTIO_PYTHON_INSTALL_DIR python)
@@ -19,9 +17,18 @@ else()
     set(OTIO_SHARED_LIBS ON)
 endif()
 
-set(OTIO_AUTOMATIC_SUBMODULES ON)
-
 find_package(Python COMPONENTS Interpreter Development)
 find_package(pybind11 CONFIG)
+
+# When pybind11 is provided by vcpkg, skip OTIO's bundled copy to prevent
+# duplicate target errors (pybind11::pybind11_headers, etc.)
+if(pybind11_FOUND)
+    set(OTIO_PYTHON_INSTALL OFF)
+    set(OTIO_INSTALL_PYTHON_MODULES OFF)
+else()
+    set(OTIO_PYTHON_INSTALL ON)
+    set(OTIO_INSTALL_PYTHON_MODULES ON)
+    set(OTIO_AUTOMATIC_SUBMODULES ON)
+endif()
 
 add_subdirectory("OpenTimelineIO")

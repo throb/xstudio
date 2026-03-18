@@ -183,6 +183,9 @@ endif()
 
 if (USE_VCPKG)
 
+  # Tell pybind11 to use modern FindPython instead of deprecated FindPythonInterp
+  set(PYBIND11_FINDPYTHON ON)
+
   # When building with VCPKG, we will use OTIO submodule
   set(OTIO_SUBMODULE true)
   add_subdirectory("extern/otio")
