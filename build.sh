@@ -9,6 +9,7 @@
 #   all         - configure + build + deploy (default)
 #   clean       - Remove build directory
 #   clean-qml   - Delete QML autogen cache (required after QML changes)
+#   setup       - Install prerequisites only (vcpkg, Qt6)
 #
 # Options:
 #   --preset <name>   - CMake preset (default: auto-detected)
@@ -30,12 +31,14 @@ JOBS=""
 COMMAND="all"
 PRESET=""
 NO_DEPLOY=false
+VCPKG_DIR="${SCRIPT_DIR}/../vcpkg"
 
 # ---------- Colour output ----------
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
+BOLD='\033[1m'
 NC='\033[0m'
 
 info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
@@ -97,7 +100,7 @@ lib_ext() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            configure|build|deploy|all|clean|clean-qml)
+            configure|build|deploy|all|clean|clean-qml|setup)
                 COMMAND="$1" ;;
             --preset)   shift; PRESET="$1" ;;
             --config)   shift; CONFIG="$1" ;;
@@ -126,8 +129,130 @@ parse_args() {
     fi
 }
 
+# ---------- Prerequisite checks ----------
+check_cmake() {
+    if ! command -v cmake &>/dev/null; then
+        err "cmake not found."
+        case "$(uname -s)" in
+            Darwin) err "  Install with: brew install cmake" ;;
+            Linux)  err "  Install with: sudo apt install cmake  (or your distro's package manager)" ;;
+        esac
+        return 1
+    fi
+
+    local ver
+    ver="$(cmake --version | head -1 | grep -oE '[0-9]+\.[0-9]+')"
+    info "cmake ${ver} found"
+}
+
+check_qt6() {
+    # Try to find Qt6 in common locations
+    local qt6_dir=""
+
+    if [[ -n "${Qt6_DIR:-}" ]]; then
+        qt6_dir="$Qt6_DIR"
+    elif [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
+        # User may have set CMAKE_PREFIX_PATH to Qt root
+        qt6_dir="already-set-via-prefix-path"
+    fi
+
+    # Check common install locations
+    if [[ -z "$qt6_dir" ]]; then
+        local search_paths=()
+        case "$(uname -s)" in
+            Darwin)
+                search_paths=(
+                    "$(brew --prefix qt@6 2>/dev/null)/lib/cmake/Qt6"
+                    "$(brew --prefix qt 2>/dev/null)/lib/cmake/Qt6"
+                    "/opt/homebrew/opt/qt@6/lib/cmake/Qt6"
+                    "/opt/homebrew/opt/qt/lib/cmake/Qt6"
+                    "/usr/local/opt/qt@6/lib/cmake/Qt6"
+                    "/usr/local/opt/qt/lib/cmake/Qt6"
+                )
+                ;;
+            Linux)
+                search_paths=(
+                    "/usr/lib/x86_64-linux-gnu/cmake/Qt6"
+                    "/usr/lib/cmake/Qt6"
+                    "/opt/Qt/6.*/gcc_64/lib/cmake/Qt6"
+                )
+                ;;
+        esac
+
+        for p in "${search_paths[@]}"; do
+            # Handle glob expansion
+            for expanded in $p; do
+                if [[ -f "${expanded}/Qt6Config.cmake" ]]; then
+                    qt6_dir="$expanded"
+                    break 2
+                fi
+            done
+        done
+    fi
+
+    if [[ -z "$qt6_dir" ]]; then
+        err "Qt6 not found."
+        case "$(uname -s)" in
+            Darwin) err "  Install with: brew install qt@6" ;;
+            Linux)  err "  Install with: sudo apt install qt6-base-dev qt6-declarative-dev qt6-svg-dev  (or your distro's equivalent)" ;;
+        esac
+        err "  Or set Qt6_DIR to your Qt6 cmake directory"
+        return 1
+    fi
+
+    if [[ "$qt6_dir" == "already-set-via-prefix-path" ]]; then
+        info "Qt6 discovery via CMAKE_PREFIX_PATH"
+    else
+        info "Qt6 found at ${qt6_dir}"
+        export CMAKE_PREFIX_PATH="${qt6_dir}/../../..${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+    fi
+}
+
+setup_vcpkg() {
+    if [[ -f "${VCPKG_DIR}/vcpkg" ]] || [[ -f "${VCPKG_DIR}/vcpkg.exe" ]]; then
+        info "vcpkg already installed at ${VCPKG_DIR}"
+        return 0
+    fi
+
+    info "vcpkg not found at ${VCPKG_DIR} — cloning..."
+    git clone https://github.com/microsoft/vcpkg.git "$VCPKG_DIR"
+
+    info "Bootstrapping vcpkg..."
+    "$VCPKG_DIR/bootstrap-vcpkg.sh" -disableMetrics
+
+    ok "vcpkg ready"
+}
+
+check_prereqs() {
+    local failed=false
+
+    echo -e "\n${BOLD}Checking prerequisites...${NC}\n"
+
+    check_cmake || failed=true
+    check_qt6   || failed=true
+
+    if [[ ! -f "${VCPKG_DIR}/vcpkg" ]] && [[ ! -f "${VCPKG_DIR}/vcpkg.exe" ]]; then
+        warn "vcpkg not found — will install automatically"
+        setup_vcpkg
+    else
+        info "vcpkg found at ${VCPKG_DIR}"
+    fi
+
+    echo ""
+
+    if [[ "$failed" == true ]]; then
+        err "Missing prerequisites. Install them and try again."
+        exit 1
+    fi
+
+    ok "All prerequisites satisfied"
+    echo ""
+}
+
 # ---------- Commands ----------
 do_configure() {
+    check_prereqs
+
     local preset
     preset="$(resolve_preset)"
     info "Configuring with preset: ${preset}"
@@ -203,6 +328,11 @@ do_clean_qml() {
     ok "QML cache cleaned. Rebuild required."
 }
 
+do_setup() {
+    check_prereqs
+    ok "Setup complete — ready to build. Run: ./build.sh"
+}
+
 # ---------- Main ----------
 parse_args "$@"
 
@@ -224,4 +354,6 @@ case "$COMMAND" in
         do_clean ;;
     clean-qml)
         do_clean_qml ;;
+    setup)
+        do_setup ;;
 esac
