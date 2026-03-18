@@ -130,29 +130,83 @@ parse_args() {
 }
 
 # ---------- Prerequisite checks ----------
-check_cmake() {
-    if ! command -v cmake &>/dev/null; then
-        err "cmake not found."
-        case "$(uname -s)" in
-            Darwin) err "  Install with: brew install cmake" ;;
-            Linux)  err "  Install with: sudo apt install cmake  (or your distro's package manager)" ;;
-        esac
-        return 1
-    fi
 
-    local ver
-    ver="$(cmake --version | head -1 | grep -oE '[0-9]+\.[0-9]+')"
-    info "cmake ${ver} found"
+# System packages required to build xstudio and its vcpkg dependencies.
+# Each entry: "command|brew_pkg|apt_pkg|description"
+REQUIRED_TOOLS=(
+    "cmake|cmake|cmake|CMake build system"
+    "make|make|build-essential|Make build tool"
+    "nasm|nasm|nasm|Netwide Assembler (needed by aom/x264)"
+    "pkg-config|pkg-config|pkg-config|Package config helper"
+    "autoconf|autoconf|autoconf|Autoconf (needed by vcpkg ports)"
+    "automake|automake|automake|Automake (needed by vcpkg ports)"
+    "libtool|libtool|libtool-bin|Libtool (needed by vcpkg ports)"
+)
+
+check_tool() {
+    local cmd="$1" brew_pkg="$2" apt_pkg="$3" desc="$4"
+    if command -v "$cmd" &>/dev/null; then
+        return 0
+    fi
+    MISSING_TOOLS+=("$cmd")
+    MISSING_BREW+=("$brew_pkg")
+    MISSING_APT+=("$apt_pkg")
+    err "${desc} (${cmd}) not found"
+    return 1
+}
+
+check_system_tools() {
+    MISSING_TOOLS=()
+    MISSING_BREW=()
+    MISSING_APT=()
+
+    for entry in "${REQUIRED_TOOLS[@]}"; do
+        IFS='|' read -r cmd brew_pkg apt_pkg desc <<< "$entry"
+        check_tool "$cmd" "$brew_pkg" "$apt_pkg" "$desc" || true
+    done
+
+    if [[ ${#MISSING_TOOLS[@]} -gt 0 ]]; then
+        echo ""
+        case "$(uname -s)" in
+            Darwin)
+                local brew_list
+                brew_list="$(IFS=' '; echo "${MISSING_BREW[*]}")"
+                info "Install missing tools with:"
+                echo -e "  ${BOLD}brew install ${brew_list}${NC}"
+                echo ""
+                read -rp "Install now? [Y/n] " answer
+                if [[ "${answer:-Y}" =~ ^[Yy]$ ]]; then
+                    # shellcheck disable=SC2086
+                    brew install $brew_list
+                    ok "Tools installed"
+                else
+                    return 1
+                fi
+                ;;
+            Linux)
+                local apt_list
+                apt_list="$(IFS=' '; echo "${MISSING_APT[*]}")"
+                info "Install missing tools with:"
+                echo -e "  ${BOLD}sudo apt install ${apt_list}${NC}"
+                echo ""
+                read -rp "Install now? [Y/n] " answer
+                if [[ "${answer:-Y}" =~ ^[Yy]$ ]]; then
+                    sudo apt-get install -y $apt_list
+                    ok "Tools installed"
+                else
+                    return 1
+                fi
+                ;;
+        esac
+    fi
 }
 
 check_qt6() {
-    # Try to find Qt6 in common locations
     local qt6_dir=""
 
     if [[ -n "${Qt6_DIR:-}" ]]; then
         qt6_dir="$Qt6_DIR"
     elif [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
-        # User may have set CMAKE_PREFIX_PATH to Qt root
         qt6_dir="already-set-via-prefix-path"
     fi
 
@@ -180,7 +234,6 @@ check_qt6() {
         esac
 
         for p in "${search_paths[@]}"; do
-            # Handle glob expansion
             for expanded in $p; do
                 if [[ -f "${expanded}/Qt6Config.cmake" ]]; then
                     qt6_dir="$expanded"
@@ -191,13 +244,33 @@ check_qt6() {
     fi
 
     if [[ -z "$qt6_dir" ]]; then
-        err "Qt6 not found."
+        echo ""
         case "$(uname -s)" in
-            Darwin) err "  Install with: brew install qt@6" ;;
-            Linux)  err "  Install with: sudo apt install qt6-base-dev qt6-declarative-dev qt6-svg-dev  (or your distro's equivalent)" ;;
+            Darwin)
+                err "Qt6 not found."
+                info "Install with:"
+                echo -e "  ${BOLD}brew install qt@6${NC}"
+                echo ""
+                read -rp "Install now? [Y/n] " answer
+                if [[ "${answer:-Y}" =~ ^[Yy]$ ]]; then
+                    brew install qt@6
+                    # Re-detect after install
+                    qt6_dir="$(brew --prefix qt@6 2>/dev/null || brew --prefix qt 2>/dev/null)/lib/cmake/Qt6"
+                    if [[ ! -f "${qt6_dir}/Qt6Config.cmake" ]]; then
+                        qt6_dir="$(brew --prefix qt 2>/dev/null)/lib/cmake/Qt6"
+                    fi
+                else
+                    return 1
+                fi
+                ;;
+            Linux)
+                err "Qt6 not found."
+                info "Install with:"
+                echo -e "  ${BOLD}sudo apt install qt6-base-dev qt6-declarative-dev qt6-svg-dev${NC}"
+                err "Or set Qt6_DIR to your Qt6 cmake directory"
+                return 1
+                ;;
         esac
-        err "  Or set Qt6_DIR to your Qt6 cmake directory"
-        return 1
     fi
 
     if [[ "$qt6_dir" == "already-set-via-prefix-path" ]]; then
@@ -228,8 +301,8 @@ check_prereqs() {
 
     echo -e "\n${BOLD}Checking prerequisites...${NC}\n"
 
-    check_cmake || failed=true
-    check_qt6   || failed=true
+    check_system_tools || failed=true
+    check_qt6          || failed=true
 
     if [[ ! -f "${VCPKG_DIR}/vcpkg" ]] && [[ ! -f "${VCPKG_DIR}/vcpkg.exe" ]]; then
         warn "vcpkg not found — will install automatically"
