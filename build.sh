@@ -368,8 +368,14 @@ do_build() {
         do_configure
     fi
 
-    info "Building target '${TARGET}' (${CONFIG}, ${JOBS} jobs)..."
-    cmake --build "$BUILD_DIR" --config "$CONFIG" --target "$TARGET" -j "$JOBS"
+    if [[ "$TARGET" == "xstudio" ]]; then
+        # Build all targets to ensure resources (preferences, fonts, plugins) are copied
+        info "Building all targets (${CONFIG}, ${JOBS} jobs)..."
+        cmake --build "$BUILD_DIR" --config "$CONFIG" -j "$JOBS"
+    else
+        info "Building target '${TARGET}' (${CONFIG}, ${JOBS} jobs)..."
+        cmake --build "$BUILD_DIR" --config "$CONFIG" --target "$TARGET" -j "$JOBS"
+    fi
     ok "Build complete"
 }
 
