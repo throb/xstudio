@@ -54,7 +54,6 @@ Rectangle {
             }
         }
         onPressed: mouse => {
-
             // here we make sure the viewport is attached to the correct
             // playhead - we want the 'main' playhead of the timeline not the
             // auxillary one which is used for showing individual clips

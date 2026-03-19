@@ -718,6 +718,19 @@ void PlayheadActor::init() {
             // handles incoming notification from a child playhead that their
             // logical frame has changed
             if (child == hero_sub_playhead_.actor()) {
+                auto push_ui_value = [this](module::Attribute *attr, const utility::JsonStore &value) {
+                    auto central_models_data_actor =
+                        this->system().registry().template get<caf::actor>(
+                            global_ui_model_data_registry);
+                    anon_mail(
+                        ui::model_data::set_node_data_atom_v,
+                        std::string("{") + to_string(Module::uuid()) + std::string("}"),
+                        attr->uuid(),
+                        module::Attribute::role_name(module::Attribute::Value),
+                        value,
+                        caf::actor_cast<caf::actor>(this))
+                        .send(central_models_data_actor);
+                };
 
                 playhead_logical_frame_->set_value(logical_frame, false);
                 playhead_position_seconds_->set_value(timebase::to_seconds(position()));
@@ -727,6 +740,31 @@ void PlayheadActor::init() {
                 current_frame_timecode_as_frame_->set_value(tc.total_frames(), false);
                 playhead_media_frame_->set_value(media_frame, false);
                 image_uri_->set_value(uri);
+
+                // These attrs are updated internally by playback/jump messages, so we
+                // avoid the normal notify path to prevent recursive control messages.
+                // Mirror the new values into the UI model explicitly so transport widgets
+                // and frame counters stay in sync with the rendered image.
+                push_ui_value(
+                    playhead_logical_frame_,
+                    utility::JsonStore(playhead_logical_frame_->role_data_as_json(
+                        module::Attribute::Value)));
+                push_ui_value(
+                    playhead_media_logical_frame_,
+                    utility::JsonStore(playhead_media_logical_frame_->role_data_as_json(
+                        module::Attribute::Value)));
+                push_ui_value(
+                    current_frame_timecode_,
+                    utility::JsonStore(current_frame_timecode_->role_data_as_json(
+                        module::Attribute::Value)));
+                push_ui_value(
+                    current_frame_timecode_as_frame_,
+                    utility::JsonStore(current_frame_timecode_as_frame_->role_data_as_json(
+                        module::Attribute::Value)));
+                push_ui_value(
+                    playhead_media_frame_,
+                    utility::JsonStore(playhead_media_frame_->role_data_as_json(
+                        module::Attribute::Value)));
 
                 mail(
                     utility::event_atom_v,

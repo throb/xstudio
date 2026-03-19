@@ -347,10 +347,15 @@ class Session(Container, NotificationHandler):
         Args:
             src(Container): Playlist, Subset, ContactSheet, Timeline
         """
-        self.connection.send(
+        self.connection.request_receive(
+            self.remote,
+            viewport_active_media_container_atom(),
+            src.uuid,
+            )
+        self.connection.request_receive(
             self.remote,
             active_media_container_atom(),
-            src.uuid_actor().actor
+            src.uuid,
             )
 
     @property
