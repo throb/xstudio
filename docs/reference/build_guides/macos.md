@@ -63,8 +63,16 @@ Run the appropriate command for your platform (whether you have an older Intel o
 
     cmake -B build --preset MacOSIntelRelease
 
-When this has finished, you can build xSTUDIO with this command. 
+When this has finished, you can build xSTUDIO with this command.
 
     cmake --build build --parallel 16 --target install
 
 If the build is successful, you should have an application bundle in the 'build' folder called 'xSTUDIO.app'. This can be drag & dropped into your applications folder, desktop and dock as for any other application.
+
+### App bundle notes
+
+- Normal macOS builds now run `macdeployqt` as part of the xSTUDIO target build and refresh `build/xSTUDIO.app` in place.
+- The post-build bundle fixup removes build-tree and `/opt/homebrew` rpaths from the app and plugin dylibs, so local builds no longer require manual `install_name_tool` edits before launch.
+- Local development builds can be launched either with `open build/xSTUDIO.app` or by running `build/xSTUDIO.app/Contents/MacOS/xstudio.bin` directly.
+- The filesystem browser prefers the bundled `Contents/MacOS/ffmpeg` binary when it is present in the app bundle.
+- Bundle signing is currently set up for local development launch/verification. Stricter macOS codesign and notarization cleanup is tracked separately and is not yet documented as complete.
