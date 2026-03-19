@@ -1,0 +1,109 @@
+set(APP_BUNDLE_DIR "@CMAKE_BINARY_DIR@/xSTUDIO.app")
+set(ARCHIVE_PATH "@XSTUDIO_MACOS_RELEASE_ARCHIVE@")
+set(NOTARIZED_ARCHIVE_PATH "@XSTUDIO_MACOS_NOTARIZED_ARCHIVE@")
+set(CODESIGN_IDENTITY "@XSTUDIO_MACOS_CODESIGN_IDENTITY@")
+set(NOTARY_KEYCHAIN_PROFILE "@XSTUDIO_MACOS_NOTARY_KEYCHAIN_PROFILE@")
+set(NOTARY_KEYCHAIN "@XSTUDIO_MACOS_NOTARY_KEYCHAIN_ABS@")
+set(NOTARY_TIMEOUT "@XSTUDIO_MACOS_NOTARY_TIMEOUT@")
+set(NOTARY_LOG_PATH "@CMAKE_BINARY_DIR@/xstudio-notarytool-submit.json")
+set(NOTARY_API_KEY "$ENV{XSTUDIO_MACOS_NOTARY_API_KEY}")
+set(NOTARY_API_KEY_ID "$ENV{XSTUDIO_MACOS_NOTARY_KEY_ID}")
+set(NOTARY_API_ISSUER "$ENV{XSTUDIO_MACOS_NOTARY_ISSUER}")
+
+function(run_checked)
+    execute_process(
+        COMMAND ${ARGV}
+        RESULT_VARIABLE command_result
+        OUTPUT_VARIABLE command_stdout
+        ERROR_VARIABLE command_stderr
+    )
+
+    if(NOT command_result EQUAL 0)
+        list(JOIN ARGV " " command_line)
+        message(
+            FATAL_ERROR
+            "Command failed (${command_result}): ${command_line}\n"
+            "stdout:\n${command_stdout}\n"
+            "stderr:\n${command_stderr}"
+        )
+    endif()
+endfunction()
+
+if(CODESIGN_IDENTITY STREQUAL "" OR CODESIGN_IDENTITY STREQUAL "-")
+    message(
+        FATAL_ERROR
+        "xstudio_macos_notarize requires XSTUDIO_MACOS_CODESIGN_IDENTITY to be a "
+        "Developer ID Application identity."
+    )
+endif()
+
+if(NOT EXISTS "${APP_BUNDLE_DIR}")
+    message(FATAL_ERROR "App bundle does not exist: ${APP_BUNDLE_DIR}")
+endif()
+
+if(NOT EXISTS "${ARCHIVE_PATH}")
+    message(FATAL_ERROR "Release archive does not exist: ${ARCHIVE_PATH}")
+endif()
+
+set(notary_command xcrun notarytool submit "${ARCHIVE_PATH}")
+
+if(NOTARY_KEYCHAIN_PROFILE)
+    list(APPEND notary_command --keychain-profile "${NOTARY_KEYCHAIN_PROFILE}")
+    if(NOTARY_KEYCHAIN)
+        list(APPEND notary_command --keychain "${NOTARY_KEYCHAIN}")
+    endif()
+elseif(NOTARY_API_KEY AND NOTARY_API_KEY_ID)
+    list(APPEND notary_command --key "${NOTARY_API_KEY}" --key-id "${NOTARY_API_KEY_ID}")
+    if(NOTARY_API_ISSUER)
+        list(APPEND notary_command --issuer "${NOTARY_API_ISSUER}")
+    endif()
+else()
+    message(
+        FATAL_ERROR
+        "Configure XSTUDIO_MACOS_NOTARY_KEYCHAIN_PROFILE or set "
+        "XSTUDIO_MACOS_NOTARY_API_KEY and XSTUDIO_MACOS_NOTARY_KEY_ID in the environment "
+        "before running xstudio_macos_notarize."
+    )
+endif()
+
+list(APPEND notary_command --wait --timeout "${NOTARY_TIMEOUT}" --output-format json)
+
+message(STATUS "Submitting ${ARCHIVE_PATH} for notarization")
+execute_process(
+    COMMAND ${notary_command}
+    RESULT_VARIABLE notary_result
+    OUTPUT_VARIABLE notary_stdout
+    ERROR_VARIABLE notary_stderr
+)
+
+file(WRITE "${NOTARY_LOG_PATH}" "${notary_stdout}")
+
+if(NOT notary_result EQUAL 0)
+    list(JOIN notary_command " " notary_command_line)
+    message(
+        FATAL_ERROR
+        "Notarization failed (${notary_result}): ${notary_command_line}\n"
+        "stdout:\n${notary_stdout}\n"
+        "stderr:\n${notary_stderr}\n"
+        "Saved submit response to ${NOTARY_LOG_PATH}"
+    )
+endif()
+
+message(STATUS "Saved notarization response to ${NOTARY_LOG_PATH}")
+run_checked(xcrun stapler staple "${APP_BUNDLE_DIR}")
+run_checked(xcrun stapler validate "${APP_BUNDLE_DIR}")
+
+get_filename_component(NOTARIZED_ARCHIVE_DIR "${NOTARIZED_ARCHIVE_PATH}" DIRECTORY)
+file(MAKE_DIRECTORY "${NOTARIZED_ARCHIVE_DIR}")
+file(REMOVE "${NOTARIZED_ARCHIVE_PATH}")
+
+message(STATUS "Creating stapled macOS archive ${NOTARIZED_ARCHIVE_PATH}")
+run_checked(
+    /usr/bin/ditto
+    -c
+    -k
+    --keepParent
+    --sequesterRsrc
+    "${APP_BUNDLE_DIR}"
+    "${NOTARIZED_ARCHIVE_PATH}"
+)

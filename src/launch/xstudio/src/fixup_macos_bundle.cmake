@@ -2,6 +2,18 @@ if(NOT DEFINED APP_BUNDLE_DIR)
     message(FATAL_ERROR "APP_BUNDLE_DIR must be provided")
 endif()
 
+if(NOT DEFINED CODESIGN_IDENTITY OR CODESIGN_IDENTITY STREQUAL "")
+    set(CODESIGN_IDENTITY "-")
+endif()
+
+if(NOT DEFINED CODESIGN_ENTITLEMENTS)
+    set(CODESIGN_ENTITLEMENTS "")
+endif()
+
+if(NOT DEFINED CODESIGN_ENABLE_HARDENED_RUNTIME)
+    set(CODESIGN_ENABLE_HARDENED_RUNTIME OFF)
+endif()
+
 if(POLICY CMP0009)
     cmake_policy(SET CMP0009 NEW)
 endif()
@@ -78,7 +90,35 @@ function(normalise_framework_id library_file)
 endfunction()
 
 function(sign_code_file target_file)
-    run_checked(codesign --force --sign - --timestamp=none "${target_file}")
+    set(options USE_RUNTIME)
+    set(one_value_args ENTITLEMENTS)
+    cmake_parse_arguments(SIGN_CODE "${options}" "${one_value_args}" "" ${ARGN})
+
+    set(sign_command codesign --force --sign "${CODESIGN_IDENTITY}")
+
+    if(CODESIGN_IDENTITY STREQUAL "-")
+        list(APPEND sign_command --timestamp=none)
+    else()
+        list(APPEND sign_command --timestamp)
+    endif()
+
+    if(
+        SIGN_CODE_USE_RUNTIME
+        AND CODESIGN_ENABLE_HARDENED_RUNTIME
+        AND NOT CODESIGN_IDENTITY STREQUAL "-"
+    )
+        list(APPEND sign_command --options runtime)
+    endif()
+
+    if(SIGN_CODE_ENTITLEMENTS)
+        if(NOT EXISTS "${SIGN_CODE_ENTITLEMENTS}")
+            message(FATAL_ERROR "Entitlements file does not exist: ${SIGN_CODE_ENTITLEMENTS}")
+        endif()
+        list(APPEND sign_command --entitlements "${SIGN_CODE_ENTITLEMENTS}")
+    endif()
+
+    list(APPEND sign_command "${target_file}")
+    run_checked(${sign_command})
 endfunction()
 
 file(GLOB_RECURSE FRAMEWORK_LIBRARIES
@@ -114,7 +154,7 @@ file(GLOB FRAMEWORK_BUNDLES
     "${APP_BUNDLE_DIR}/Contents/Frameworks/*.framework"
 )
 foreach(framework_bundle IN LISTS FRAMEWORK_BUNDLES)
-    run_checked(codesign --force --sign - --timestamp=none "${framework_bundle}")
+    sign_code_file("${framework_bundle}")
 endforeach()
 
 foreach(candidate IN LISTS MACHO_CANDIDATES)
@@ -130,10 +170,16 @@ foreach(candidate IN LISTS MACHO_CANDIDATES)
         continue()
     endif()
 
-    if(candidate MATCHES "\\.(dylib|so)$" OR candidate MATCHES "/Contents/MacOS/")
+    if(candidate MATCHES "/Contents/MacOS/")
+        sign_code_file("${candidate}" USE_RUNTIME)
+    elseif(candidate MATCHES "\\.(dylib|so)$")
         sign_code_file("${candidate}")
     endif()
 endforeach()
 
-run_checked(codesign --force --sign - --timestamp=none "${APP_BUNDLE_DIR}")
+sign_code_file(
+    "${APP_BUNDLE_DIR}"
+    USE_RUNTIME
+    ENTITLEMENTS "${CODESIGN_ENTITLEMENTS}"
+)
 run_checked(codesign --verify -vv --strict --deep "${APP_BUNDLE_DIR}")

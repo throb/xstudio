@@ -116,6 +116,67 @@ if(WIN32)
 
 elseif(APPLE)
 
+    set(XSTUDIO_MACOS_CODESIGN_IDENTITY
+        "-"
+        CACHE STRING
+        "Signing identity for xSTUDIO.app. Use '-' for ad-hoc local signing or a 'Developer ID Application: ...' identity for release builds."
+    )
+    set(XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS
+        ""
+        CACHE FILEPATH
+        "Optional entitlements plist to apply when signing release macOS app bundles."
+    )
+    set(XSTUDIO_MACOS_ENABLE_HARDENED_RUNTIME
+        ON
+        CACHE BOOL
+        "Enable hardened runtime when signing xSTUDIO.app with a non ad-hoc identity."
+    )
+    set(XSTUDIO_MACOS_NOTARY_KEYCHAIN_PROFILE
+        ""
+        CACHE STRING
+        "Keychain profile name for 'xcrun notarytool submit'. Leave empty to use API key environment variables instead."
+    )
+    set(XSTUDIO_MACOS_NOTARY_KEYCHAIN
+        ""
+        CACHE FILEPATH
+        "Optional keychain path used with XSTUDIO_MACOS_NOTARY_KEYCHAIN_PROFILE."
+    )
+    set(XSTUDIO_MACOS_NOTARY_TIMEOUT
+        "15m"
+        CACHE STRING
+        "Timeout passed to 'xcrun notarytool submit --wait --timeout'."
+    )
+    set(XSTUDIO_MACOS_RELEASE_ARCHIVE
+        "${CMAKE_BINARY_DIR}/xSTUDIO-${PROJECT_VERSION}-macOS.zip"
+        CACHE FILEPATH
+        "Zip archive path produced by the xstudio_macos_zip target."
+    )
+    set(XSTUDIO_MACOS_NOTARIZED_ARCHIVE
+        "${CMAKE_BINARY_DIR}/xSTUDIO-${PROJECT_VERSION}-macOS-notarized.zip"
+        CACHE FILEPATH
+        "Zip archive path produced by the xstudio_macos_notarize target after stapling the app bundle."
+    )
+
+    set(XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS_ABS "${XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS}")
+    if(XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS_ABS)
+        get_filename_component(
+            XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS_ABS
+            "${XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS_ABS}"
+            ABSOLUTE
+            BASE_DIR "${CMAKE_SOURCE_DIR}"
+        )
+    endif()
+
+    set(XSTUDIO_MACOS_NOTARY_KEYCHAIN_ABS "${XSTUDIO_MACOS_NOTARY_KEYCHAIN}")
+    if(XSTUDIO_MACOS_NOTARY_KEYCHAIN_ABS)
+        get_filename_component(
+            XSTUDIO_MACOS_NOTARY_KEYCHAIN_ABS
+            "${XSTUDIO_MACOS_NOTARY_KEYCHAIN_ABS}"
+            ABSOLUTE
+            BASE_DIR "${CMAKE_SOURCE_DIR}"
+        )
+    endif()
+
 	set_target_properties(${PROJECT_NAME}
 		PROPERTIES
 		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/MacOS"
@@ -147,9 +208,41 @@ elseif(APPLE)
         message(FATAL_ERROR "macdeployqt not found in ${_qt_bin_dir}")
     endif()
     configure_file(macdeploy.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake @ONLY)
+    configure_file(
+        package_macos_bundle.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/package_macos_bundle.cmake
+        @ONLY
+    )
+    configure_file(
+        notarize_macos_bundle.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/notarize_macos_bundle.cmake
+        @ONLY
+    )
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake
+    )
+
+    add_custom_target(xstudio_macos_refresh_bundle
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake
+        DEPENDS ${PROJECT_NAME}
+        COMMENT "Refreshing xSTUDIO.app with macdeployqt and bundle fixups"
+    )
+
+    add_custom_target(xstudio_macos_zip
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/package_macos_bundle.cmake
+        DEPENDS xstudio_macos_refresh_bundle
+        COMMENT "Packaging xSTUDIO.app into a macOS zip archive"
+    )
+
+    add_custom_target(xstudio_macos_notarize
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/notarize_macos_bundle.cmake
+        DEPENDS xstudio_macos_zip
+        COMMENT "Submitting xSTUDIO.app for notarization and stapling the result"
+    )
+
+    add_custom_target(xstudio_macos_release
+        DEPENDS xstudio_macos_notarize
     )
 
     install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake)

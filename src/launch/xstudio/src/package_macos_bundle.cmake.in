@@ -1,0 +1,40 @@
+set(APP_BUNDLE_DIR "@CMAKE_BINARY_DIR@/xSTUDIO.app")
+set(ARCHIVE_PATH "@XSTUDIO_MACOS_RELEASE_ARCHIVE@")
+
+function(run_checked)
+    execute_process(
+        COMMAND ${ARGV}
+        RESULT_VARIABLE command_result
+        OUTPUT_VARIABLE command_stdout
+        ERROR_VARIABLE command_stderr
+    )
+
+    if(NOT command_result EQUAL 0)
+        list(JOIN ARGV " " command_line)
+        message(
+            FATAL_ERROR
+            "Command failed (${command_result}): ${command_line}\n"
+            "stdout:\n${command_stdout}\n"
+            "stderr:\n${command_stderr}"
+        )
+    endif()
+endfunction()
+
+if(NOT EXISTS "${APP_BUNDLE_DIR}")
+    message(FATAL_ERROR "App bundle does not exist: ${APP_BUNDLE_DIR}")
+endif()
+
+get_filename_component(ARCHIVE_DIR "${ARCHIVE_PATH}" DIRECTORY)
+file(MAKE_DIRECTORY "${ARCHIVE_DIR}")
+file(REMOVE "${ARCHIVE_PATH}")
+
+message(STATUS "Creating macOS archive ${ARCHIVE_PATH}")
+run_checked(
+    /usr/bin/ditto
+    -c
+    -k
+    --keepParent
+    --sequesterRsrc
+    "${APP_BUNDLE_DIR}"
+    "${ARCHIVE_PATH}"
+)

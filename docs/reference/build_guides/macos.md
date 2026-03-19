@@ -76,4 +76,51 @@ If the build is successful, you should have an application bundle in the 'build'
 - Local development builds can be launched either with `open build/xSTUDIO.app` or by running `build/xSTUDIO.app/Contents/MacOS/xstudio.bin` directly.
 - The filesystem browser prefers the bundled `Contents/MacOS/ffmpeg` binary when it is present in the app bundle.
 - Local development builds now pass standard `codesign --verify -vv --strict --deep build/xSTUDIO.app` verification after the normal build completes.
-- Developer ID signing and Apple notarization are separate release/distribution work and are not covered by this local build guide.
+- Release signing/notarization is now available as an explicit build target so normal development builds stay simple.
+
+### Release signing and notarization
+
+To produce a distributable macOS zip archive signed with a `Developer ID Application` certificate, configure the build with the signing identity before you build:
+
+    cmake -B build --preset MacOSRelease \
+      -DXSTUDIO_MACOS_CODESIGN_IDENTITY="Developer ID Application: Example Company (TEAMID)"
+
+Optional release variables:
+
+- `XSTUDIO_MACOS_CODESIGN_ENTITLEMENTS` points to an entitlements plist if the shipped app needs one.
+- `XSTUDIO_MACOS_ENABLE_HARDENED_RUNTIME` defaults to `ON` for release signing.
+- `XSTUDIO_MACOS_RELEASE_ARCHIVE` overrides the unsigned zip path produced by `xstudio_macos_zip`.
+- `XSTUDIO_MACOS_NOTARIZED_ARCHIVE` overrides the stapled zip path produced by `xstudio_macos_notarize`.
+
+The release helper targets are:
+
+- `xstudio_macos_refresh_bundle` reruns `macdeployqt` and bundle fixups on `build/xSTUDIO.app`.
+- `xstudio_macos_zip` refreshes the bundle and creates a distributable zip archive.
+- `xstudio_macos_notarize` submits the zip to Apple, staples the returned ticket to `build/xSTUDIO.app`, validates it, and writes a stapled zip archive.
+- `xstudio_macos_release` is a convenience alias for `xstudio_macos_notarize`.
+
+Example commands:
+
+    cmake --build build --parallel 16 --target xstudio_macos_zip
+    cmake --build build --parallel 16 --target xstudio_macos_release
+
+For notarization you must configure one authentication method:
+
+1. Store credentials in the keychain and set `XSTUDIO_MACOS_NOTARY_KEYCHAIN_PROFILE`:
+
+       xcrun notarytool store-credentials xstudio-notary \
+         --apple-id "developer@example.com" \
+         --team-id "TEAMID" \
+         --password "app-specific-password"
+
+       cmake -B build --preset MacOSRelease \
+         -DXSTUDIO_MACOS_CODESIGN_IDENTITY="Developer ID Application: Example Company (TEAMID)" \
+         -DXSTUDIO_MACOS_NOTARY_KEYCHAIN_PROFILE=xstudio-notary
+
+2. Or export App Store Connect API key environment variables before running `xstudio_macos_notarize`:
+
+       export XSTUDIO_MACOS_NOTARY_API_KEY=/path/to/AuthKey_ABC123XYZ.p8
+       export XSTUDIO_MACOS_NOTARY_KEY_ID=ABC123XYZ
+       export XSTUDIO_MACOS_NOTARY_ISSUER=01234567-89ab-cdef-0123-456789abcdef
+
+The notarization target saves the raw `notarytool` JSON response to `build/xstudio-notarytool-submit.json`.
