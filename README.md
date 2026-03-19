@@ -108,6 +108,8 @@ The repo now includes a native multi-platform release workflow in [`.github/work
 - Windows uses the existing NSIS `PACKAGE` target.
 - macOS publishes both Apple Silicon and Intel zip archives using `xstudio_macos_zip`.
 - Linux currently publishes an installed-tree `.tar.gz` rather than a fully self-contained AppImage or distro package.
+- To watch a run locally, use `gh run watch <run-id>`.
+- Optional Discord notifications are supported by setting the repository secret `DISCORD_WEBHOOK_URL`; the workflow posts one final success/failure message after the full matrix settles.
 
 ### Release Caveats
 

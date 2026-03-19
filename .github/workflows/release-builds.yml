@@ -246,3 +246,58 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$TARGET_RELEASE_TAG" release-artifacts/* --clobber
+
+  notify-discord:
+    name: Notify Discord
+    runs-on: ubuntu-22.04
+    needs: [build, publish]
+    if: ${{ always() }}
+    env:
+      WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      BUILD_RESULT: ${{ needs.build.result }}
+      PUBLISH_RESULT: ${{ needs.publish.result }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+      REF_NAME: ${{ github.ref_name }}
+      REPOSITORY: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SERVER_URL: ${{ github.server_url }}
+    steps:
+      - name: Skip when Discord webhook is not configured
+        if: env.WEBHOOK_URL == ''
+        run: echo "DISCORD_WEBHOOK_URL is not configured; skipping Discord notification."
+
+      - name: Post Discord notification
+        if: env.WEBHOOK_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          result="succeeded"
+          if [ "$BUILD_RESULT" != "success" ] || { [ "$PUBLISH_RESULT" != "success" ] && [ "$PUBLISH_RESULT" != "skipped" ]; }; then
+            result="failed"
+          fi
+
+          ref_label="${RELEASE_TAG:-$REF_NAME}"
+          release_url=""
+          if [ -n "$RELEASE_TAG" ]; then
+            release_url="${SERVER_URL}/${REPOSITORY}/releases/tag/${RELEASE_TAG}"
+          fi
+
+          printf -v message '%s\n%s\n%s\n%s\n%s\n%s' \
+            "xSTUDIO release builds ${result}" \
+            "repo: ${REPOSITORY}" \
+            "ref: ${ref_label}" \
+            "build: ${BUILD_RESULT}" \
+            "publish: ${PUBLISH_RESULT}" \
+            "run: ${RUN_URL}"
+
+          if [ -n "$release_url" ]; then
+            printf -v message '%s\n%s' "$message" "release: ${release_url}"
+          fi
+
+          payload="$(jq -nc --arg content "$message" '{content: $content}')"
+
+          curl -fsSL \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$WEBHOOK_URL"
