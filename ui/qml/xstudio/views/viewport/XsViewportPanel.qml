@@ -155,6 +155,31 @@ Rectangle{
         targetWidget: viewportWidget
         dragSourceName: "Viewport"
 
+        function targetContainerIndex() {
+            var idx = theSessionData.viewportCurrentMediaContainerIndex
+            if (!idx || !idx.valid) {
+                idx = theSessionData.currentMediaContainerIndex
+            }
+            if (!idx || !idx.valid) {
+                idx = theSessionData.createPlaylist(theSessionData.getNextName("Playlist {}"))
+            }
+            return idx
+        }
+
+        function syncViewportDropSelection(idx, quuids) {
+            if (!idx || !idx.valid || !quuids.length) {
+                return
+            }
+
+            // A drop directly on the viewport is an explicit request to view
+            // the new media, so keep the inspected and viewed containers aligned
+            // before selecting the dropped items for the playhead.
+            theSessionData.currentMediaContainerIndex = idx
+            theSessionData.viewportCurrentMediaContainerIndex = idx
+            mediaSelectionModel.lastContainerWithUserSelection = idx
+            mediaSelectionModel.selectNewMedia(idx, quuids)
+        }
+
         onDropped: (mousePosition, source, data) => {
 
             if (source !== "External URIS" && source !== "External JSON")
@@ -164,18 +189,16 @@ Rectangle{
                 ? {"text/uri-list": data}
                 : data
 
-            // Use the current playlist if one exists, otherwise create one
-            var idx = theSessionData.currentMediaContainerIndex
-            if (!idx || !idx.valid) {
-                idx = theSessionData.createPlaylist(theSessionData.getNextName("Playlist {}"))
-            }
+            var idx = targetContainerIndex()
 
             Future.promise(
                 theSessionData.handleDropFuture(
                     Qt.CopyAction,
                     dropData,
                     idx)
-            ).then(function(quuids){})
+            ).then(function(quuids){
+                syncViewportDropSelection(idx, quuids)
+            })
         }
     }
 
