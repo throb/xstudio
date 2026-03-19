@@ -1,0 +1,248 @@
+name: Release Builds
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to upload artifacts to
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-builds-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  QT_VERSION: 6.5.3
+  VCPKG_COMMIT: d90a9b159c08169f39adcd1b0f1ac0ca12c4b96c
+  VCPKG_DISABLE_METRICS: 1
+  VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-binary-cache,readwrite
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: windows-x64
+            label: Windows x64
+            runner: windows-2022
+            os: windows
+            preset: WinRelease
+            qt_arch: win64_msvc2019_64
+          - id: linux-x64
+            label: Linux x64
+            runner: ubuntu-22.04
+            os: linux
+            preset: LinuxRelease
+            qt_arch: gcc_64
+          - id: macos-arm64
+            label: macOS arm64
+            runner: macos-14
+            os: macos
+            preset: MacOSRelease
+            qt_arch: clang_64
+            macos_arch: arm64
+          - id: macos-x64
+            label: macOS x64
+            runner: macos-15-intel
+            os: macos
+            preset: MacOSIntelRelease
+            qt_arch: clang_64
+            macos_arch: x64
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf \
+            autoconf-archive \
+            automake \
+            libtool \
+            nasm \
+            pkg-config
+
+      - name: Install macOS build dependencies
+        if: matrix.os == 'macos'
+        run: |
+          for package in autoconf autoconf-archive automake libtool nasm pkg-config; do
+            brew list "$package" >/dev/null 2>&1 || brew install "$package"
+          done
+
+      - name: Install Windows build dependencies
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: choco install nsis --no-progress -y
+
+      - name: Install Qt on Windows
+        if: matrix.os == 'windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+          dir: C:/Qt
+
+      - name: Install Qt on Unix
+        if: matrix.os != 'windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-binary-cache
+          key: ${{ runner.os }}-${{ matrix.id }}-vcpkg-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'cmake/**/*.cmake', 'cmake/otio_patch.diff', 'cmake/vcpkg_triplets/*', 'src/**/CMakeLists.txt') }}
+
+      - name: Pin vcpkg checkout
+        shell: bash
+        run: |
+          if [ ! -d ../vcpkg/.git ]; then
+            git clone https://github.com/microsoft/vcpkg.git ../vcpkg
+          fi
+
+          git -C ../vcpkg fetch --tags origin
+          git -C ../vcpkg checkout --force "${VCPKG_COMMIT}"
+
+      - name: Bootstrap vcpkg on Windows
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: ..\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Bootstrap vcpkg on Unix
+        if: matrix.os != 'windows'
+        shell: bash
+        run: ../vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Apply OTIO patch
+        shell: bash
+        run: |
+          if git apply --check cmake/otio_patch.diff; then
+            git apply cmake/otio_patch.diff
+          else
+            echo "cmake/otio_patch.diff is already applied or no longer needed."
+          fi
+
+      - name: Configure on Windows
+        if: matrix.os == 'windows'
+        shell: bash
+        run: cmake --preset "${{ matrix.preset }}"
+
+      - name: Configure on Unix
+        if: matrix.os != 'windows'
+        shell: bash
+        env:
+          CMAKE_PREFIX_PATH: ${{ env.QT_ROOT_DIR }}
+          Qt6_DIR: ${{ env.QT_ROOT_DIR }}/lib/cmake/Qt6
+        run: cmake --preset "${{ matrix.preset }}"
+
+      - name: Build Windows installer
+        if: matrix.os == 'windows'
+        shell: bash
+        run: cmake --build build --parallel --config Release --target PACKAGE
+
+      - name: Build Linux binaries
+        if: matrix.os == 'linux'
+        shell: bash
+        env:
+          CMAKE_PREFIX_PATH: ${{ env.QT_ROOT_DIR }}
+          Qt6_DIR: ${{ env.QT_ROOT_DIR }}/lib/cmake/Qt6
+        run: cmake --build build --parallel
+
+      - name: Build macOS archive
+        if: matrix.os == 'macos'
+        shell: bash
+        env:
+          CMAKE_PREFIX_PATH: ${{ env.QT_ROOT_DIR }}
+          Qt6_DIR: ${{ env.QT_ROOT_DIR }}/lib/cmake/Qt6
+        run: cmake --build build --parallel --target xstudio_macos_zip
+
+      - name: Stage Windows artifact
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          $installer = Get-ChildItem -Path build -Filter 'xSTUDIO-*.exe' -File | Select-Object -First 1
+          if (-not $installer) {
+            throw 'Windows installer not found in build/'
+          }
+          Copy-Item $installer.FullName dist/
+
+      - name: Stage Linux artifact
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          version="$(sed -n 's/^set(XSTUDIO_GLOBAL_VERSION \"\\([^\"]*\\)\".*/\\1/p' CMakeLists.txt)"
+          mkdir -p dist
+          cmake --install build --prefix build/xstudio_install
+          tar -C build -czf "dist/xSTUDIO-${version}-linux-x64.tar.gz" xstudio_install
+
+      - name: Stage macOS artifact
+        if: matrix.os == 'macos'
+        shell: bash
+        run: |
+          zip_file="$(find build -maxdepth 1 -type f -name 'xSTUDIO-*-macOS*.zip' | head -n 1)"
+          if [ -z "$zip_file" ]; then
+            echo "macOS release archive not found in build/"
+            exit 1
+          fi
+
+          mkdir -p dist
+          base_name="$(basename "$zip_file" .zip)"
+          cp "$zip_file" "dist/${base_name}-${{ matrix.macos_arch }}.zip"
+
+      - name: Upload platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.id }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish Release Assets
+    runs-on: ubuntu-22.04
+    needs: build
+    env:
+      TARGET_RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+    steps:
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd release-artifacts
+          shasum -a 256 * > SHA256SUMS.txt
+          ls -lh
+
+      - name: Upload combined workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts/*
+          if-no-files-found: error
+
+      - name: Attach artifacts to GitHub release
+        if: github.event_name == 'release' || inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TARGET_RELEASE_TAG" release-artifacts/* --clobber

@@ -99,6 +99,23 @@ Launch: `portable/bin/xstudio.exe`
 
 ---
 
+## GitHub Releases
+
+The repo now includes a native multi-platform release workflow in [`.github/workflows/release-builds.yml`](.github/workflows/release-builds.yml).
+
+- Publishing a GitHub release builds and uploads Windows, Linux, and macOS artifacts.
+- Manual runs via `workflow_dispatch` build the same artifacts and keep them as workflow artifacts; if you provide an existing `release_tag`, the workflow also uploads them to that release.
+- Windows uses the existing NSIS `PACKAGE` target.
+- macOS publishes both Apple Silicon and Intel zip archives using `xstudio_macos_zip`.
+- Linux currently publishes an installed-tree `.tar.gz` rather than a fully self-contained AppImage or distro package.
+
+### Release Caveats
+
+- macOS release automation currently produces unsigned/ad-hoc archives unless you add signing and notarization credentials to CI.
+- Linux packaging is good for build validation and internal distribution, but it still needs a dedicated self-contained packaging path for broader end-user release distribution.
+
+---
+
 ## REST API Reference
 
 The Remote API plugin starts an HTTP server on `localhost:45678`. All requests require an `X-API-Key` header. The key is auto-generated on first launch and written to a `.api_key` file in the plugin directory.
