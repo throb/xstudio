@@ -6,6 +6,21 @@ Release Notes
 =============
 
 ======
+v1.1.3
+======
+
+**Overview**
+
+xSTUDIO v1.1.3 is a maintenance release focused on release automation, packaging, and safer filesystem browser loading across platforms.
+
+**New in this version (v1.1.3)**
+
+- Filesystem Browser loading is more reliable for Windows UNC image sequences, including ``####`` and ``%04d`` patterns and basenames containing underscores.
+- GitHub Releases can now publish native Windows, Linux, macOS Apple Silicon, and macOS Intel build artifacts from GitHub Actions.
+- Windows package versioning now follows the project version, keeping installers aligned with the app build they contain.
+- Release packaging is more consistent across platforms, with dedicated archive generation for macOS and automated artifact checksum publication in CI.
+
+======
 v1.1.0
 ======
 
