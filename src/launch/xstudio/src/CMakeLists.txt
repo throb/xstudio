@@ -143,14 +143,16 @@ elseif(APPLE)
     get_target_property(_qmake_executable Qt6::qmake IMPORTED_LOCATION)
     get_filename_component(_qt_bin_dir "${_qmake_executable}" DIRECTORY)
     find_program(macdeployqt_exe macdeployqt HINTS "${_qt_bin_dir}")
-        configure_file(macdeploy.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake @ONLY)
-    install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake)
+    if(NOT macdeployqt_exe)
+        message(FATAL_ERROR "macdeployqt not found in ${_qt_bin_dir}")
+    endif()
+    configure_file(macdeploy.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake @ONLY)
 
-    # Add custom command to fix library paths after build
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -DAPP_BUNDLE_DIR=${CMAKE_BINARY_DIR}/xSTUDIO.app
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/fixup_macos_bundle.cmake
+        COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake
     )
+
+    install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/macdeploy.cmake)
 
 else()
 

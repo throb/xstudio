@@ -105,7 +105,8 @@ macro(default_options_local name)
         PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/Frameworks"
         INSTALL_RPATH "@executable_path/../Frameworks"
-        INSTALL_RPATH_USE_LINK_PATH TRUE
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH_USE_LINK_PATH FALSE
     )
 	else()
 		set_target_properties(${name}
@@ -175,6 +176,9 @@ macro(default_plugin_options name)
 		set_target_properties(${name}
 	    	PROPERTIES
 	    	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/PlugIns/xstudio"
+			INSTALL_RPATH "@executable_path/../Frameworks"
+			BUILD_WITH_INSTALL_RPATH TRUE
+			INSTALL_RPATH_USE_LINK_PATH FALSE
 		)
 		#InstallSymlink(${CMAKE_INSTALL_PREFIX}/xstudio.bin.app/Contents/Frameworks lib${name}.dylib
 		#		${CMAKE_INSTALL_PREFIX}/xstudio.bin.app/Contents/Resources/share/xstudio/plugin/lib${name}.dylib
@@ -645,5 +649,3 @@ endmacro()
 macro(set_python_to_proper_build_type)
 	#TODO Resolve linking error when running debug build: https://github.com/pybind/pybind11/issues/3403
 endmacro()
-
-

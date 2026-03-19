@@ -44,16 +44,40 @@ def _find_ffmpeg():
     if env_path and os.path.isfile(env_path):
         return env_path, None  # (binary, dyld_lib_path)
 
-    # 2. xStudio app bundle (same directory as the main binary)
-    exe = sys.argv[0] if sys.argv else ""
-    exe_dir = os.path.dirname(exe)
     ffmpeg_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
-    bundle_ffmpeg = os.path.join(exe_dir, ffmpeg_name)
-    if os.path.isfile(bundle_ffmpeg):
-        # Bundled ffmpeg needs Frameworks dir on DYLD_LIBRARY_PATH (macOS only)
-        frameworks = os.path.join(exe_dir, "..", "Frameworks")
-        frameworks = os.path.normpath(frameworks)
-        return bundle_ffmpeg, frameworks
+
+    # 2. xStudio app bundle. Embedded Python does not reliably expose the main
+    # executable via sys.argv[0], so probe several bundle-relative locations.
+    candidate_dirs = []
+
+    def add_candidate_dir(path_value):
+        if not path_value:
+            return
+        try:
+            candidate_dir = pathlib.Path(path_value).expanduser().resolve().parent
+        except Exception:
+            return
+        if candidate_dir not in candidate_dirs:
+            candidate_dirs.append(candidate_dir)
+
+    add_candidate_dir(sys.executable)
+    add_candidate_dir(sys.argv[0] if sys.argv else "")
+
+    try:
+        module_path = pathlib.Path(__file__).resolve()
+        for parent in module_path.parents:
+            if parent.name == "Contents":
+                add_candidate_dir(parent / "MacOS" / "xstudio.bin")
+                break
+    except Exception:
+        pass
+
+    for candidate_dir in candidate_dirs:
+        bundle_ffmpeg = candidate_dir / ffmpeg_name
+        if bundle_ffmpeg.is_file():
+            # Bundled ffmpeg needs Frameworks dir on DYLD_LIBRARY_PATH (macOS only)
+            frameworks = candidate_dir.parent / "Frameworks"
+            return str(bundle_ffmpeg), str(frameworks)
 
     # 3. System PATH
     system_ffmpeg = shutil.which("ffmpeg")

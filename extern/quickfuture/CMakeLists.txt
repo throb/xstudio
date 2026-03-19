@@ -23,6 +23,9 @@ if(APPLE)
     set_target_properties(quickfuture
         PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/PlugIns/xstudio/qml/QuickFuture"
+        INSTALL_RPATH "@executable_path/../Frameworks"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH_USE_LINK_PATH FALSE
     )
 else()
     set_target_properties(quickfuture
