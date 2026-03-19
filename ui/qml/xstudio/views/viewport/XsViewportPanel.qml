@@ -155,28 +155,70 @@ Rectangle{
         targetWidget: viewportWidget
         dragSourceName: "Viewport"
 
-        function targetContainerIndex() {
-            var idx = theSessionData.viewportCurrentMediaContainerIndex
+        function isPlayableContainerIndex(idx) {
             if (!idx || !idx.valid) {
-                idx = theSessionData.currentMediaContainerIndex
+                return false
             }
-            if (!idx || !idx.valid) {
+
+            var type = theSessionData.get(idx, "typeRole")
+            return ["Playlist", "Subset", "Timeline", "ContactSheet"].includes(type)
+        }
+
+        function isPreviewContainerIndex(idx) {
+            return isPlayableContainerIndex(idx) && theSessionData.get(idx, "nameRole") === "Preview"
+        }
+
+        function targetContainerIndex() {
+            var idx = theSessionData.currentMediaContainerIndex
+            if (isPreviewContainerIndex(idx)) {
+                idx = mediaSelectionModel.lastContainerWithUserSelection
+            }
+            if (!isPlayableContainerIndex(idx)) {
+                idx = mediaSelectionModel.lastContainerWithUserSelection
+            }
+            if (!isPlayableContainerIndex(idx)) {
+                idx = theSessionData.viewportCurrentMediaContainerIndex
+            }
+            if (isPreviewContainerIndex(idx)) {
+                idx = mediaSelectionModel.lastContainerWithUserSelection
+            }
+            if (!isPlayableContainerIndex(idx)) {
                 idx = theSessionData.createPlaylist(theSessionData.getNextName("Playlist {}"))
             }
             return idx
         }
 
-        function syncViewportDropSelection(idx, quuids) {
+        function syncViewportDropSelection(idx, quuids, retries) {
             if (!idx || !idx.valid || !quuids.length) {
                 return
             }
 
-            // A drop directly on the viewport is an explicit request to view
-            // the new media, so keep the inspected and viewed containers aligned
-            // before selecting the dropped items for the playhead.
+            if (retries === undefined) {
+                retries = 6
+            }
+
             theSessionData.currentMediaContainerIndex = idx
             theSessionData.viewportCurrentMediaContainerIndex = idx
             mediaSelectionModel.lastContainerWithUserSelection = idx
+
+            var currentIdx = theSessionData.currentMediaContainerIndex
+            var currentUuid = (currentIdx && currentIdx.valid)
+                ? theSessionData.get(currentIdx, "actorUuidRole")
+                : ""
+            var targetUuid = theSessionData.get(idx, "actorUuidRole")
+
+            // The inspected container change is asynchronous. Wait until the
+            // SessionData current container points at the drop target before
+            // trying to attach the playhead selection to the new media.
+            if (currentUuid !== targetUuid && retries > 0) {
+                theSessionData.callbackTimer.setTimeout(function(targetIdx, targetMedia, remaining) {
+                    return function() {
+                        syncViewportDropSelection(targetIdx, targetMedia, remaining - 1)
+                    }
+                }(idx, quuids, retries), 50)
+                return
+            }
+
             mediaSelectionModel.selectNewMedia(idx, quuids)
         }
 

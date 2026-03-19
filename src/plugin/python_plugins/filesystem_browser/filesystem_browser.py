@@ -376,6 +376,7 @@ class FilesystemBrowserPlugin(PluginBase):
         # State tracking for Preview Mode
         self.original_playlist_uuid = None
         self.preview_playlist_uuid = None
+        self.pending_preview_deletion_uuid = None
 
         # Dedicated attribute for batch thumbnail requests from QML.
         # QML writes a JSON array of paths; Python reads and queues them all at once.
@@ -500,6 +501,9 @@ class FilesystemBrowserPlugin(PluginBase):
                 elif action == "preview_file":
                     file_path = data.get("path")
                     self._preview_file(file_path)
+                
+                elif action == "cancel_preview":
+                    self._cancel_preview()
                     
                 elif action == "request_browser":
                     # Open native directory dialog
@@ -1034,25 +1038,7 @@ class FilesystemBrowserPlugin(PluginBase):
                 try:
                     prev_uuid = self.pending_preview_deletion_uuid
                     self.pending_preview_deletion_uuid = None
-                    
-                    _dbg(f"Attempting to delete Preview playlist node for actor: {prev_uuid}")
-                    
-                    # We need the tree node UUID, not the actor UUID
-                    tree = self.connection.api.session.playlist_tree
-                    cuuid = self._find_container_uuid(tree, prev_uuid)
-                    
-                    if cuuid:
-                        _dbg(f"Found tree node UUID: {cuuid}, calling remove_container")
-                        res = self.connection.api.session.remove_container(cuuid)
-                        _dbg(f"Deletion result: {res}")
-                        print(f"FilesystemBrowser: Deleted Preview playlist (Node: {cuuid})")
-                    else:
-                        _dbg(f"Could not find tree node UUID for {prev_uuid}")
-                        # Fallback to old method just in case, though likely to fail
-                        for p in self.connection.api.session.playlists:
-                            if str(p.uuid) == str(prev_uuid):
-                                self.connection.api.session.remove_container(p)
-                                break
+                    self._delete_preview_playlist(prev_uuid)
                 except Exception as e:
                     _dbg(f"Final cleanup error: {e}")
                     print(f"Error in final preview cleanup: {e}")
@@ -1606,6 +1592,82 @@ class FilesystemBrowserPlugin(PluginBase):
                 if res:
                     return res
         return None
+
+    def _delete_preview_playlist(self, preview_uuid):
+        if not preview_uuid:
+            return
+
+        try:
+            _dbg(f"Attempting to delete Preview playlist node for actor: {preview_uuid}")
+
+            tree = self.connection.api.session.playlist_tree
+            cuuid = self._find_container_uuid(tree, preview_uuid)
+
+            if cuuid:
+                _dbg(f"Found tree node UUID: {cuuid}, calling remove_container")
+                res = self.connection.api.session.remove_container(cuuid)
+                _dbg(f"Deletion result: {res}")
+                print(f"FilesystemBrowser: Deleted Preview playlist (Node: {cuuid})")
+            else:
+                _dbg(f"Could not find tree node UUID for {preview_uuid}")
+                for p in self.connection.api.session.playlists:
+                    if str(p.uuid) == str(preview_uuid):
+                        self.connection.api.session.remove_container(p)
+                        break
+        except Exception as e:
+            _dbg(f"Preview cleanup error: {e}")
+            print(f"Error cleaning up Preview playlist: {e}")
+
+    def _cancel_preview(self):
+        if self.preview_playlist_uuid is None:
+            self.original_playlist_uuid = None
+            return
+
+        restore_playlist = None
+
+        try:
+            if self.original_playlist_uuid is not None:
+                orig_uuid_str = str(self.original_playlist_uuid)
+                for p in self.connection.api.session.playlists:
+                    if str(p.uuid) == orig_uuid_str and p.name != "Preview":
+                        restore_playlist = p
+                        break
+
+            if restore_playlist is None and hasattr(self, 'last_used_playlist_uuid'):
+                target_uuid_str = str(self.last_used_playlist_uuid)
+                for p in self.connection.api.session.playlists:
+                    if str(p.uuid) == target_uuid_str and p.name != "Preview":
+                        restore_playlist = p
+                        break
+
+            if restore_playlist is None:
+                playlists = [
+                    p for p in self.connection.api.session.playlists if p.name != "Preview"
+                ]
+                if playlists:
+                    restore_playlist = playlists[0]
+                else:
+                    self.connection.api.session.create_playlist("Filesystem Import")
+                    playlists = [
+                        p for p in self.connection.api.session.playlists
+                        if p.name != "Preview"
+                    ]
+                    if playlists:
+                        restore_playlist = playlists[0]
+
+            if restore_playlist is not None:
+                self.last_used_playlist_uuid = restore_playlist.uuid
+                self.connection.api.session.set_on_screen_source(restore_playlist)
+                try:
+                    self.connection.api.session.viewed_container = restore_playlist
+                except Exception:
+                    pass
+        finally:
+            preview_uuid = self.preview_playlist_uuid
+            self.original_playlist_uuid = None
+            self.preview_playlist_uuid = None
+            self.pending_preview_deletion_uuid = None
+            self._delete_preview_playlist(preview_uuid)
 
     def _preview_file(self, path):
         """Load a file into the transient Preview playlist."""

@@ -38,6 +38,15 @@ Rectangle {
             }
         }
     }
+
+    function cancelPreviewForDrag() {
+        previewTimer.stop()
+        pendingPreviewPath = ""
+        if (isPreviewMode) {
+            isPreviewMode = false
+            sendCommand({"action": "cancel_preview"})
+        }
+    }
     
     // Additional Attributes for History/Pins
     XsAttributeValue {
@@ -1788,16 +1797,17 @@ Rectangle {
                             }
                         }
                         onPositionChanged: (mouse) => {
-                            if (mouse.buttons & Qt.LeftButton) {
-                                var dx = mouse.x - dragStartPos.x;
-                                var dy = mouse.y - dragStartPos.y;
-                                if (!dragActive && Math.sqrt(dx*dx + dy*dy) > 10) {
-                                    dragActive = true;
-                                    if (!modelData.isFolder) {
-                                        // Build file URI for the drag
-                                        var filePath = modelData.path.replace(/\\/g, "/");
-                                        // Ensure proper file:/// URI format
-                                        if (filePath.charAt(0) !== '/') {
+                                if (mouse.buttons & Qt.LeftButton) {
+                                    var dx = mouse.x - dragStartPos.x;
+                                    var dy = mouse.y - dragStartPos.y;
+                                    if (!dragActive && Math.sqrt(dx*dx + dy*dy) > 10) {
+                                        dragActive = true;
+                                        root.cancelPreviewForDrag()
+                                        if (!modelData.isFolder) {
+                                            // Build file URI for the drag
+                                            var filePath = modelData.path.replace(/\\/g, "/");
+                                            // Ensure proper file:/// URI format
+                                            if (filePath.charAt(0) !== '/') {
                                             filePath = "/" + filePath; // Windows: C:/foo → /C:/foo
                                         }
                                         dragProxy.filePath = filePath;
@@ -2261,6 +2271,7 @@ Rectangle {
                                         var dy = mouse.y - dragStartPos.y;
                                         if (!dragActive && Math.sqrt(dx*dx + dy*dy) > 10) {
                                             dragActive = true;
+                                            root.cancelPreviewForDrag()
                                             var filePath = modelData.path.replace(/\\/g, "/");
                                             if (filePath.charAt(0) !== '/') filePath = "/" + filePath;
                                             dragProxy.filePath = filePath;
