@@ -121,9 +121,9 @@ void xstudio::ui::qml::setup_xstudio_qml_emgine(QQmlEngine *engine, caf::actor_s
     engine->addImportPath("qrc:///extern");
 
     // gui plugins..
-    engine->addImportPath(QStringFromStd(xstudio_plugin_dir("/qml")));
+    engine->addImportPath(QStringFromStd(xstudio_qml_plugin_dir("")));
     engine->addPluginPath(QStringFromStd(xstudio_plugin_dir("")));
-    engine->addPluginPath(QStringFromStd(xstudio_plugin_dir("/qml")));
+    engine->addPluginPath(QStringFromStd(xstudio_qml_plugin_dir("")));
 
     // env var XSTUDIO_PLUGIN_PATH is search path for plugins. Add
     // subfolders named qml for qt to look for .qml files installed

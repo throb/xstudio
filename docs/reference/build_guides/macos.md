@@ -75,4 +75,5 @@ If the build is successful, you should have an application bundle in the 'build'
 - The post-build bundle fixup removes build-tree and `/opt/homebrew` rpaths from the app and plugin dylibs, so local builds no longer require manual `install_name_tool` edits before launch.
 - Local development builds can be launched either with `open build/xSTUDIO.app` or by running `build/xSTUDIO.app/Contents/MacOS/xstudio.bin` directly.
 - The filesystem browser prefers the bundled `Contents/MacOS/ffmpeg` binary when it is present in the app bundle.
-- Bundle signing is currently set up for local development launch/verification. Stricter macOS codesign and notarization cleanup is tracked separately and is not yet documented as complete.
+- Local development builds now pass standard `codesign --verify -vv --strict --deep build/xSTUDIO.app` verification after the normal build completes.
+- Developer ID signing and Apple notarization are separate release/distribution work and are not covered by this local build guide.

@@ -2,9 +2,33 @@ if(NOT DEFINED APP_BUNDLE_DIR)
     message(FATAL_ERROR "APP_BUNDLE_DIR must be provided")
 endif()
 
+if(POLICY CMP0009)
+    cmake_policy(SET CMP0009 NEW)
+endif()
+
 get_filename_component(APP_BUNDLE_DIR "${APP_BUNDLE_DIR}" ABSOLUTE)
 get_filename_component(BUILD_DIR "${APP_BUNDLE_DIR}" DIRECTORY)
 string(REGEX REPLACE "([][+.*^$()\\\\|?])" "\\\\\\1" BUILD_DIR_REGEX "${BUILD_DIR}")
+
+set(LEGACY_QML_PLUGIN_DIR "${APP_BUNDLE_DIR}/Contents/PlugIns/xstudio/qml")
+if(EXISTS "${LEGACY_QML_PLUGIN_DIR}")
+    file(REMOVE_RECURSE "${LEGACY_QML_PLUGIN_DIR}")
+endif()
+
+set(PYTHON_FRAMEWORK_HOME "${APP_BUNDLE_DIR}/Contents/Frameworks/lib/python3.12")
+set(PYTHON_RESOURCE_HOME "${APP_BUNDLE_DIR}/Contents/Resources/python/lib/python3.12")
+if(EXISTS "${PYTHON_FRAMEWORK_HOME}")
+    file(MAKE_DIRECTORY "${APP_BUNDLE_DIR}/Contents/Resources/python/lib")
+    if(EXISTS "${PYTHON_RESOURCE_HOME}")
+        file(REMOVE_RECURSE "${PYTHON_RESOURCE_HOME}")
+    endif()
+    file(RENAME "${PYTHON_FRAMEWORK_HOME}" "${PYTHON_RESOURCE_HOME}")
+
+    file(GLOB FRAMEWORK_LIB_REMAINDER LIST_DIRECTORIES TRUE "${APP_BUNDLE_DIR}/Contents/Frameworks/lib/*")
+    if(NOT FRAMEWORK_LIB_REMAINDER)
+        file(REMOVE_RECURSE "${APP_BUNDLE_DIR}/Contents/Frameworks/lib")
+    endif()
+endif()
 
 function(run_checked)
     execute_process(
@@ -71,6 +95,12 @@ file(GLOB_RECURSE MACHO_CANDIDATES
     "${APP_BUNDLE_DIR}/Contents/Frameworks/*"
     "${APP_BUNDLE_DIR}/Contents/PlugIns/*"
 )
+file(GLOB_RECURSE RESOURCE_CODE_CANDIDATES
+    LIST_DIRECTORIES FALSE
+    "${APP_BUNDLE_DIR}/Contents/Resources/*.dylib"
+    "${APP_BUNDLE_DIR}/Contents/Resources/*.so"
+)
+list(APPEND MACHO_CANDIDATES ${RESOURCE_CODE_CANDIDATES})
 list(REMOVE_DUPLICATES MACHO_CANDIDATES)
 
 foreach(candidate IN LISTS MACHO_CANDIDATES)
@@ -105,35 +135,5 @@ foreach(candidate IN LISTS MACHO_CANDIDATES)
     endif()
 endforeach()
 
-execute_process(
-    COMMAND codesign --force --sign - --deep --timestamp=none --ignore-resources "${APP_BUNDLE_DIR}"
-    RESULT_VARIABLE app_codesign_result
-    OUTPUT_VARIABLE app_codesign_stdout
-    ERROR_VARIABLE app_codesign_stderr
-)
-
-execute_process(
-    COMMAND codesign -vv --deep --ignore-resources "${APP_BUNDLE_DIR}"
-    RESULT_VARIABLE app_verify_result
-    OUTPUT_VARIABLE app_verify_stdout
-    ERROR_VARIABLE app_verify_stderr
-)
-
-if(NOT app_verify_result EQUAL 0)
-    message(
-        FATAL_ERROR
-        "Bundle code signing verification failed.\n"
-        "codesign stdout:\n${app_codesign_stdout}\n"
-        "codesign stderr:\n${app_codesign_stderr}\n"
-        "verify stdout:\n${app_verify_stdout}\n"
-        "verify stderr:\n${app_verify_stderr}"
-    )
-endif()
-
-if(NOT app_codesign_result EQUAL 0)
-    message(
-        STATUS
-        "codesign returned ${app_codesign_result}; continuing because "
-        "--ignore-resources verification succeeded."
-    )
-endif()
+run_checked(codesign --force --sign - --timestamp=none "${APP_BUNDLE_DIR}")
+run_checked(codesign --verify -vv --strict --deep "${APP_BUNDLE_DIR}")

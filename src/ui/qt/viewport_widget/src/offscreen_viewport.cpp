@@ -550,8 +550,9 @@ void OffscreenViewport::initGL() {
         connect(render_control_, SIGNAL(renderRequested()), this, SLOT(sceneChanged()));
 
         // gui plugins..
-        qml_engine_->addImportPath(QStringFromStd(utility::xstudio_plugin_dir("/qml")));
+        qml_engine_->addImportPath(QStringFromStd(utility::xstudio_qml_plugin_dir("")));
         qml_engine_->addPluginPath(QStringFromStd(utility::xstudio_plugin_dir("")));
+        qml_engine_->addPluginPath(QStringFromStd(utility::xstudio_qml_plugin_dir("")));
 
         gl_context_->moveToThread(thread_);
         qml_engine_->moveToThread(thread_);

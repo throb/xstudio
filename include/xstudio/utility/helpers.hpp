@@ -384,6 +384,8 @@ namespace utility {
 
     std::string xstudio_plugin_dir(const std::string &append_path = "");
 
+    std::string xstudio_qml_plugin_dir(const std::string &append_path = "");
+
     std::string xstudio_resources_dir(const std::string &append_path = "");
 
     inline std::string remote_session_path() {

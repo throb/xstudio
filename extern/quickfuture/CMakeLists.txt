@@ -22,7 +22,7 @@ set(QML_FILES
 if(APPLE)
     set_target_properties(quickfuture
         PROPERTIES
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/PlugIns/xstudio/qml/QuickFuture"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/Resources/qml/QuickFuture"
         INSTALL_RPATH "@executable_path/../Frameworks"
         BUILD_WITH_INSTALL_RPATH TRUE
         INSTALL_RPATH_USE_LINK_PATH FALSE
@@ -44,24 +44,24 @@ endif()
 # This may not be the best solution. We need to install the quickfuture qml and
 # library at build time into the ./bin/plugin/qml/QuickFuture folder. This allows
 # us to run xstudio directly from the build target without doing an install
-add_custom_target(COPY_FUTURE_QML DEPENDS copy-cmds)
+add_custom_target(COPY_FUTURE_QML)
 set(QML_FUTURE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/qmldir
     ${CMAKE_CURRENT_SOURCE_DIR}/src/quickfuture.qmltypes
 )
 
 if (APPLE)
-    set(QML_DEST_DIR ${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/PlugIns/xstudio/qml/QuickFuture)
+    set(QML_DEST_DIR ${CMAKE_BINARY_DIR}/xSTUDIO.app/Contents/Resources/qml/QuickFuture)
 else()
     set(QML_DEST_DIR ${CMAKE_BINARY_DIR}/bin/plugin/qml/QuickFuture)
 endif()
 
-add_custom_command(OUTPUT copy-cmds POST_BUILD
+add_custom_command(TARGET COPY_FUTURE_QML POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E
                         make_directory ${QML_DEST_DIR})
 
 foreach(QMLFile ${QML_FUTURE_FILES})
-    add_custom_command(OUTPUT copy-cmds APPEND PRE_BUILD
+    add_custom_command(TARGET COPY_FUTURE_QML POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E
                         copy ${QMLFile} ${QML_DEST_DIR}/)
 endforeach()

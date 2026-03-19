@@ -920,6 +920,14 @@ std::string xstudio::utility::xstudio_plugin_dir(const std::string &append_path)
 #endif
 }
 
+std::string xstudio::utility::xstudio_qml_plugin_dir(const std::string &append_path) {
+#ifdef __apple__
+    return xstudio_resources_dir("qml" + append_path);
+#else
+    return xstudio_plugin_dir("/qml" + append_path);
+#endif
+}
+
 std::string xstudio::utility::xstudio_resources_dir(const std::string &append_path) {
 #ifdef __apple__
     return xstudio_root("/Resources/" + append_path);

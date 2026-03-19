@@ -55,9 +55,9 @@ void EmbeddedPython::setup() {
                 auto p = fs::path(info.dli_fname);
                 std::string python_home;
                 if (p.string().find("Contents/Frameworks") != std::string::npos) {
-                    // String match will happen On MacOS install, here python
-                    // installation is in Frameworks colder in the app bundle
-                    python_home = p.parent_path();
+                    // App-bundle builds keep the Python stdlib under Resources
+                    // so the Frameworks folder only contains code objects.
+                    python_home = utility::xstudio_resources_dir("python");
                 } else {
                     // Otherwise, we jump up twice to get above the 'lib' folder
                     // where python310.so is installed, as python home should
