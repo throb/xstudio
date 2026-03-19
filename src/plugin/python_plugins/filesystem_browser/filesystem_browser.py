@@ -18,6 +18,8 @@ import tempfile
 import uuid as _uuid
 from datetime import datetime
 
+from .path_utils import looks_like_sequence_path, normalize_sequence_load_path
+
 # Try importing fileseq
 try:
     import fileseq
@@ -980,57 +982,9 @@ class FilesystemBrowserPlugin(PluginBase):
                  print(f"Skipping duplicate (pending load): {path}")
                  return
             else:
-                # --- Sequence Handling ---
-                loaded_as_sequence = False
-                if fileseq_available:
-                    try:
-                        seq = fileseq.FileSequence(path)
-                        if len(seq) > 1:
-                            # It's a sequence!
-                            # Construct xstudio-compatible sequence string with Explicit Range:
-                            # /path/to/prefix_{:04d}.ext=1001-1050
-                            
-                            dirname = seq.dirname()
-                            basename = seq.basename() # e.g. 'shot_' or 'shot.'
-                            
-                            # Calculate padding width from '####' or '@@@@@'
-                            pad_str = seq.padding()
-                            if pad_str == '#':
-                                pad_len = 4
-                            else:
-                                pad_len = len(pad_str) if pad_str else 0
-                            
-                            # Construct brace pattern e.g. {:04d}
-                            # If no padding, just empty brace? No, xstudio expects {:0Nd} usually.
-                            # But fileseq handling > 1 implies padding.
-                            
-                            brace_padding = f"{{:0{pad_len}d}}" if pad_len > 0 else ""
-                            
-                            frames = str(seq.frameSet()) # e.g. 1001-1050
-                            ext = seq.extension() # e.g. .exr
-                            
-                            # Normalize basename: sometimes fileseq puts the whole thing in basename.
-                            # But typical usage: dirname + basename + padded_part + ext
-                            
-                            # Construct the special path for xstudio parsing
-                            # IMPORTANT: xstudio regex expects: ^(.*\{.+\}.*?)(=([-0-9x,]+))?$
-                            # So we put the brace pattern in the path, and the range at end.
-                            
-                            seq_path = f"{dirname}{basename}{brace_padding}{ext}={frames}"
-                            
-                            # playlist.add_media(path) calls parse_posix_path internally 
-                            # which handles this pattern.
-                            media = playlist.add_media(seq_path)
-                            loaded_as_sequence = True
-                            
-                    except Exception as e:
-                        print(f"Sequence load error: {e}")
-
-                if not loaded_as_sequence:
-                    media = playlist.add_media(path)
-                    print(f"Loaded File: {path}")
-                else:
-                    print(f"Loaded Sequence: {seq_path}")
+                media = self._add_media_to_playlist(playlist, path)
+                if not media:
+                    return
                 # Add to cache immediately
                 self.playlist_path_cache[pl_uuid].add(tgt_path)
 
@@ -1571,37 +1525,28 @@ class FilesystemBrowserPlugin(PluginBase):
 
     def _add_media_to_playlist(self, playlist, path):
         """Helper to add media handling sequences."""
-        import os
         try:
-             print(f"[DEBUG _add_media_to_playlist] input path: {path}")
-             tgt_path = os.path.normpath(os.path.abspath(path))
+            print(f"[DEBUG _add_media_to_playlist] input path: {path}")
 
-             # Check for sequence
-             if fileseq_available:
-                 try:
-                    seq = fileseq.FileSequence(path)
-                    print(f"[DEBUG _add_media_to_playlist] fileseq parsed: len={len(seq)}, padding='{seq.padding()}', frameSet={seq.frameSet()}")
-                    if len(seq) >= 1 and seq.frameSet() is not None:
-                        dirname = seq.dirname()
-                        basename = seq.basename()
-                        pad_str = seq.padding()
-                        if pad_str == '#':
-                            pad_len = 4
-                        else:
-                            pad_len = len(pad_str) if pad_str else 0
-                        brace_padding = f"{{:0{pad_len}d}}" if pad_len > 0 else ""
-                        frames = str(seq.frameSet())
-                        ext = seq.extension()
-                        seq_path = f"{dirname}{basename}{brace_padding}{ext}={frames}"
-                        print(f"[DEBUG _add_media_to_playlist] sequence path for C++: {seq_path}")
-                        return playlist.add_media(seq_path)
-                    else:
-                        print(f"[DEBUG _add_media_to_playlist] len<=1, falling through to raw path")
-                 except Exception as e:
-                    print(f"[DEBUG _add_media_to_playlist] fileseq parse error: {e}")
+            normalized_path = normalize_sequence_load_path(path)
+            if normalized_path:
+                print(
+                    "[DEBUG _add_media_to_playlist] normalized sequence path for C++: "
+                    f"{normalized_path}"
+                )
+                return playlist.add_media(normalized_path)
 
-             print(f"[DEBUG _add_media_to_playlist] sending raw path to C++: {path}")
-             return playlist.add_media(path)
+            if looks_like_sequence_path(path):
+                msg = (
+                    "FilesystemBrowser: refusing to send unresolved sequence template to "
+                    f"xSTUDIO: {path}"
+                )
+                _dbg(msg)
+                print(msg)
+                return None
+
+            print(f"[DEBUG _add_media_to_playlist] sending raw path to C++: {path}")
+            return playlist.add_media(path)
         except Exception as e:
             print(f"Add media error: {e}")
             return None
