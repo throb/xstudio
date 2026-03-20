@@ -73,6 +73,7 @@ jobs:
             autoconf \
             autoconf-archive \
             automake \
+            libasound2-dev \
             libtool \
             nasm \
             pkg-config
