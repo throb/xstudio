@@ -10,7 +10,8 @@
         "CMAKE_INSTALL_PREFIX": "xstudio_install",
         "X_VCPKG_APPLOCAL_DEPS_INSTALL": "ON",
         "BUILD_DOCS": "OFF",
-        "USE_VCPKG": "ON"
+        "USE_VCPKG": "ON",
+        "VCPKG_OVERLAY_PORTS": "${sourceDir}/cmake/vcpkg_ports"
       }
     },
     {
@@ -122,6 +123,7 @@
       "name": "linux-base",
       "inherits": "default",
       "cacheVariables": {
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/vcpkg_triplets",
         "VCPKG_TARGET_TRIPLET": "x64-xstudio-linux"
       }
     },
